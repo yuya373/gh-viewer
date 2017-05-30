@@ -26,26 +26,6 @@
 (require 'gh)
 (require 'gh-viewer-repo)
 
-(defface gh-viewer-pull-request-title-face
-  '((t (:foreground "#FFA000"
-                    :weight bold
-                    :height 1.0
-                    :underline t)))
-  "Face used to pull-request title"
-  :group 'gh-viewer)
-
-(defvar gh-viewer-pull-request-keymap
-  (let ((keymap (make-sparse-keymap)))
-    (define-key keymap (kbd "RET") #'gh-viewer-pull-request-browse)
-    keymap))
-
-(defun gh-viewer-pull-request-browse ()
-  (interactive)
-  (let ((url (get-text-property 0 'url (thing-at-point 'line))))
-    (if url
-        (browse-url url)
-      (error "Url not found"))))
-
 (defmethod gh-viewer-pull-request--create-buffer ((repo gh-viewer-repo))
   (let* ((bufname (format "*%s/%s - Pull Requests*" (oref repo user) (oref repo repo)))
          (buf (get-buffer-create bufname)))
@@ -55,30 +35,9 @@
       (goto-char (point-min)))
     buf))
 
-(defun gh-viewer-pull-request-format-time-string (time-string)
-  (format-time-string "%Y-%m-%d %H:%M:%S" (date-to-time time-string)))
-
-(defmethod gh-viewer-pull-request-issues-to-string ((pr gh-issues-issue) repo)
-  (let* ((title (format "#%s [%s]\t%s"
-                        (oref pr number)
-                        (oref pr state)
-                        (propertize (oref pr title)
-                                    'face 'gh-viewer-pull-request-title-face)))
-         (times (format "opened at: %s\nupdated at: %s"
-                        (gh-viewer-pull-request-format-time-string
-                         (oref pr created-at))
-                        (gh-viewer-pull-request-format-time-string
-                         (oref pr updated-at))))
-         (assignees (format "assignees: %s"
-                            (mapconcat #'(lambda (user)
-                                           (oref user login))
-                                       (oref pr assignees)
-                                       ", ")))
-         (comments (format "%s comments" (oref pr comments))))
-    (format "%s\n%s\n%s\n%s\n" title times assignees comments)))
-
 (defmethod gh-viewer-pull-request-p ((issue gh-issues-issue))
   (with-slots (pull-request) issue
+    (message "%s" pull-request)
     (slot-boundp pull-request 'html-url)))
 
 ;;;###autoload
@@ -88,14 +47,15 @@
          (cache (oref repo issues))
          (issues (if (or invalidate-cache
                          (< (length cache) 1))
-                     (gh-issues-issue-list
-                      (gh-issues-api :sync nil :cache nil)
-                      (oref repo user) (oref repo repo))
+                     (oref (gh-issues-issue-list
+                            (gh-issues-api :sync nil :cache nil)
+                            (oref repo user) (oref repo repo))
+                           data)
                    cache))
          (pulls (cl-remove-if
                  #'(lambda (issue)
                      (not (gh-viewer-pull-request-p issue)))
-                 (oref issues data)))
+                 issues))
          (buf (gh-viewer-pull-request--create-buffer repo)))
     (oset repo issues issues)
     (gh-viewer-pull-request-render buf pulls repo)))
@@ -106,10 +66,7 @@
     (with-current-buffer buf
       (setq buffer-read-only nil)
       (mapc #'(lambda (pr)
-                (insert (propertize
-                         (gh-viewer-pull-request-issues-to-string pr repo)
-                         'url (oref (oref pr pull-request) html-url)
-                         'keymap gh-viewer-pull-request-keymap))
+                (insert (gh-viewer-issue-propertize-issue pr))
                 (insert "\n"))
             pulls)
       (setq buffer-read-only t)
