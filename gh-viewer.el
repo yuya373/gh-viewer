@@ -24,6 +24,7 @@
 
 ;;; Code:
 (require 'gh-viewer-repo)
+(require 'gh-viewer-pull-request)
 
 
 
