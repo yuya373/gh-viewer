@@ -77,6 +77,10 @@
          (comments (format "%s comments" (oref pr comments))))
     (format "%s\n%s\n%s\n%s\n" title times assignees comments)))
 
+(defmethod gh-viewer-pull-request-p ((issue gh-issues-issue))
+  (with-slots (pull-request) issue
+    (slot-boundp pull-request 'html-url)))
+
 ;;;###autoload
 (defun gh-viewer-pull-request (&optional invalidate-cache)
   (interactive)
@@ -90,7 +94,7 @@
                    cache))
          (pulls (cl-remove-if
                  #'(lambda (issue)
-                     (not (gh-issues-pull-request-p (oref issue pull-request))))
+                     (not (gh-viewer-pull-request-p issue)))
                  (oref issues data)))
          (buf (gh-viewer-pull-request--create-buffer repo)))
     (oset repo issues issues)
