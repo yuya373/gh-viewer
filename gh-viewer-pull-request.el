@@ -58,9 +58,9 @@
                  issues))
          (buf (gh-viewer-pull-request--create-buffer repo)))
     (oset repo issues issues)
-    (gh-viewer-pull-request-render buf pulls repo)))
+    (gh-viewer-pull-request-render buf pulls)))
 
-(defun gh-viewer-pull-request-render (buf pulls repo)
+(defun gh-viewer-pull-request-render (buf pulls)
   (if (eq 0 (length pulls))
       (error "No Pull Requests")
     (with-current-buffer buf

@@ -71,9 +71,9 @@
                    cache))
          (buf (gh-viewer-issue--create-buffer repo)))
     (oset repo issues issues)
-    (gh-viewer-issue-render buf
-                            (cl-remove-if #'gh-viewer-pull-request-p issues)
-                            repo)))
+    (gh-viewer-issue-render
+     buf
+     (cl-remove-if #'gh-viewer-pull-request-p issues))))
 
 (defmethod gh-viewer-issue-issue-to-string ((issue gh-issues-issue))
   (let* ((title (format "#%s [%s]\t%s"
@@ -98,7 +98,7 @@
    'url (oref issue html-url)
    'keymap gh-viewer-issue-keymap))
 
-(defun gh-viewer-issue-render (buf issues repo)
+(defun gh-viewer-issue-render (buf issues)
   (if (eq 0 (length issues))
       (error "No Issues")
     (with-current-buffer buf
