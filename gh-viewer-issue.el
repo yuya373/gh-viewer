@@ -63,6 +63,7 @@
       (goto-char (point-min)))
     buf))
 
+;;;###autoload
 (defun gh-viewer-issue (&optional invalidate-cache)
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
