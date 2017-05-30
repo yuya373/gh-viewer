@@ -35,6 +35,11 @@
   "Face used to pull-request title"
   :group 'gh-viewer)
 
+(defface gh-viewer-issue-property-name-face
+  '((t (:weight bold :underline t)))
+  "Face used to issue property name"
+  :group 'gh-viewer)
+
 (defvar gh-viewer-issue-keymap
   (let ((keymap (make-sparse-keymap)))
     (define-key keymap (kbd "RET") #'gh-viewer-issue-browse)
@@ -75,22 +80,30 @@
      buf
      (cl-remove-if #'gh-viewer-pull-request-p issues))))
 
+(defun gh-viewer-issue-propertize-issue-property (prop-name)
+  (propertize prop-name 'face 'gh-viewer-issue-property-name-face))
+
 (defmethod gh-viewer-issue-issue-to-string ((issue gh-issues-issue))
   (let* ((title (format "#%s [%s]\t%s"
                         (oref issue number)
                         (oref issue state)
                         (propertize (oref issue title)
                                     'face 'gh-viewer-issue-title-face)))
-         (times (format "opened at: %s\nupdated at: %s"
-                        (gh-viewer-format-time-string (oref issue created-at))
-                        (gh-viewer-format-time-string (oref issue updated-at))))
-         (assignees (format "assignees: %s"
+         (open-at (format "%s: %s by %s"
+                          (gh-viewer-issue-propertize-issue-property "opened at")
+                          (gh-viewer-format-time-string (oref issue created-at))
+                          (oref (oref issue user) login)))
+         (updated-at (format "%s: %s"
+                             (gh-viewer-issue-propertize-issue-property "updated at")
+                             (gh-viewer-format-time-string (oref issue updated-at))))
+         (assignees (format "%s: %s"
+                            (gh-viewer-issue-propertize-issue-property "assignees")
                             (mapconcat #'(lambda (user)
                                            (oref user login))
                                        (oref issue assignees)
                                        ", ")))
          (comments (format "%s comments" (oref issue comments))))
-    (format "%s\n%s\n%s\n%s\n" title times assignees comments)))
+    (format "%s\n%s\n%s\n%s\n%s\n" title open-at updated-at assignees comments)))
 
 (defmethod gh-viewer-issue-propertize-issue ((issue gh-issues-issue))
   (propertize
