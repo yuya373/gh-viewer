@@ -25,7 +25,10 @@
 ;;; Code:
 (require 'gh)
 (require 'gh-viewer-repo)
-(require 'gh-viewer-pull-request)
+
+(defcustom gh-viewer-issue-queries nil
+  "Pre defined Queries.\n `((query-name . query-function))'\n query-function takes issue as argument, return non nil value if matches."
+  :group 'gh-viewer)
 
 (defface gh-viewer-issue-title-face
   '((t (:foreground "#FFA000"
@@ -67,14 +70,7 @@
 (defun gh-viewer-issue (&optional invalidate-cache)
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (cache (oref repo issues))
-         (issues (if (or invalidate-cache
-                         (< (length cache) 1))
-                     (oref (gh-issues-issue-list
-                            (gh-issues-api :sync nil :cache nil)
-                            (oref repo user) (oref repo repo))
-                           data)
-                   cache))
+         (issues (issues (gh-viewer-repo-issues repo invalidate-cache)))
          (buf (gh-viewer-issue--create-buffer repo)))
     (oset repo issues issues)
     (gh-viewer-issue-render
@@ -124,6 +120,22 @@
       (setq buffer-read-only t)
       (goto-char (point-min)))
     (display-buffer buf)))
+
+(defun gh-viewer-issue-assignee-equal-p (issue assignee)
+  (cl-find-if #'(lambda (user)
+                  (string= assignee (oref user login)))
+              (oref issue assignees)))
+
+;;;###autoload
+(defun gh-viewer-issue-filtered ()
+  (interactive)
+  (let* ((repo (gh-viewer-repo-select))
+         (issues (gh-viewer-repo-issues repo))
+         (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
+         (query (cdr (assoc query-name gh-viewer-issue-queries))))
+    (gh-viewer-issue-render
+     (gh-viewer-issue--create-buffer repo)
+     (cl-remove-if-not query issues))))
 
 (provide 'gh-viewer-issue)
 ;;; gh-viewer-issue.el ends here

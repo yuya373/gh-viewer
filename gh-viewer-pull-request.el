@@ -25,6 +25,7 @@
 ;;; Code:
 (require 'gh)
 (require 'gh-viewer-repo)
+(require 'gh-viewer-issue)
 
 (defmethod gh-viewer-pull-request--create-buffer ((repo gh-viewer-repo))
   (let* ((bufname (format "*%s/%s - Pull Requests*" (oref repo user) (oref repo repo)))
@@ -44,18 +45,8 @@
 (defun gh-viewer-pull-request (&optional invalidate-cache)
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (cache (oref repo issues))
-         (issues (if (or invalidate-cache
-                         (< (length cache) 1))
-                     (oref (gh-issues-issue-list
-                            (gh-issues-api :sync nil :cache nil)
-                            (oref repo user) (oref repo repo))
-                           data)
-                   cache))
-         (pulls (cl-remove-if
-                 #'(lambda (issue)
-                     (not (gh-viewer-pull-request-p issue)))
-                 issues))
+         (issues (gh-viewer-repo-issues repo invalidate-cache))
+         (pulls (gh-viewer-pull-request-remove-issues issues))
          (buf (gh-viewer-pull-request--create-buffer repo)))
     (oset repo issues issues)
     (gh-viewer-pull-request-render buf pulls)))
@@ -72,6 +63,32 @@
       (setq buffer-read-only t)
       (goto-char (point-min)))
     (display-buffer buf)))
+
+(defun gh-viewer-pull-request-remove-issues (issues)
+  (cl-remove-if #'(lambda (issue)
+                    (not (gh-viewer-pull-request-p issue)))
+                issues))
+
+(defun gh-viewer-pull-request-filter-by-assignee ()
+  (interactive)
+  (let* ((repo (gh-viewer-repo-select))
+         (pulls (gh-viewer-pull-request-remove-issues (oref repo issues)))
+         (assignee (read-from-minibuffer "Input Assignee: ")))
+    (gh-viewer-pull-request-render
+     (gh-viewer-pull-request--create-buffer repo)
+     (gh-viewer-issue--filter-by-assignee pulls assignee))))
+
+;;;###autoload
+(defun gh-viewer-pull-request-filtered ()
+  (interactive)
+  (let* ((repo (gh-viewer-repo-select))
+         (issues (gh-viewer-repo-issues repo))
+         (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
+         (query (cdr (assoc query-name gh-viewer-issue-queries)))
+         (pulls (gh-viewer-pull-request-remove-issues issues)))
+    (gh-viewer-pull-request-render
+     (gh-viewer-pull-request--create-buffer repo)
+     (cl-remove-if-not query pulls))))
 
 
 (provide 'gh-viewer-pull-request)

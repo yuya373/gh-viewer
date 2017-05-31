@@ -24,6 +24,7 @@
 
 ;;; Code:
 (require 'eieio)
+(require 'gh)
 
 (defvar gh-viewer-repos nil)
 (defclass gh-viewer-repo ()
@@ -53,6 +54,16 @@
          (input (completing-read "Select Repo: " alist))
          (selected (cdr (cl-assoc input alist :test #'string=))))
     selected))
+
+(defmethod gh-viewer-repo-issues ((repo gh-viewer-repo) &optional invalidate-cache)
+  (let ((cache (oref repo issues)))
+    (when (or invalidate-cache (< (length cache) 1))
+      (oset repo issues (oref (gh-issues-issue-list
+                               (gh-issues-api :sync nil :cache nil)
+                               (oref repo user) (oref repo repo))
+                              data))))
+
+  (oref repo issues))
 
 (provide 'gh-viewer-repo)
 ;;; gh-viewer-repo.el ends here
