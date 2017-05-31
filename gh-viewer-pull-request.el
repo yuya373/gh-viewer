@@ -38,7 +38,6 @@
 
 (defmethod gh-viewer-pull-request-p ((issue gh-issues-issue))
   (with-slots (pull-request) issue
-    (message "%s" pull-request)
     (slot-boundp pull-request 'html-url)))
 
 ;;;###autoload
