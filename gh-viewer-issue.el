@@ -80,6 +80,9 @@
 (defun gh-viewer-issue-propertize-issue-property (prop-name)
   (propertize prop-name 'face 'gh-viewer-issue-property-name-face))
 
+(defmethod gh-viewer-issue-user-name ((issue gh-issues-issue))
+  (oref (oref issue user) login))
+
 (defmethod gh-viewer-issue-issue-to-string ((issue gh-issues-issue))
   (let* ((title (format "#%s [%s]\t%s"
                         (oref issue number)
@@ -89,7 +92,7 @@
          (open-at (format "%s: %s by %s"
                           (gh-viewer-issue-propertize-issue-property "opened at")
                           (gh-viewer-format-time-string (oref issue created-at))
-                          (oref (oref issue user) login)))
+                          (gh-viewer-issue-user-name issue)))
          (updated-at (format "%s: %s"
                              (gh-viewer-issue-propertize-issue-property "updated at")
                              (gh-viewer-format-time-string (oref issue updated-at))))
@@ -125,6 +128,9 @@
   (cl-find-if #'(lambda (user)
                   (string= assignee (oref user login)))
               (oref issue assignees)))
+
+(defun gh-viewer-issue-user-equal-p (issue user)
+  (string= user (gh-viewer-issue-user-name issue)))
 
 ;;;###autoload
 (defun gh-viewer-issue-filtered ()
