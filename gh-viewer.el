@@ -31,8 +31,27 @@
 (require 'gh-viewer-pull-request)
 (require 'gh-viewer-issue)
 
+(defcustom gh-viewer-completing-read-alist
+  (list
+   (cons "PullRequests"  'gh-viewer-pull-request)
+   (cons "Filtered PullRequests"  'gh-viewer-pull-request-filtered)
+   (cons "Issues"  'gh-viewer-issue)
+   (cons "Filtered Issues"  'gh-viewer-issue-filtered))
+  "Feature alist passed to `completing-read'."
+  :group 'gh-viewer)
 
 
+;;;###autoload
+(defun gh-viewer ()
+  (interactive)
+  (let* ((selected (completing-read "Select Feature: "
+                                    gh-viewer-completing-read-alist))
+         (fun (and selected
+                   (cdr (cl-assoc selected gh-viewer-completing-read-alist
+                                  :test #'string=)))))
+    (unless fun
+      (error "Select one feature"))
+    (funcall fun)))
 
 
 
