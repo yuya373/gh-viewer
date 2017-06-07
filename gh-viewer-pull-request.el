@@ -81,7 +81,7 @@
 (defun gh-viewer-pull-request-filtered ()
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (issues (gh-viewer-repo-issues repo))
+         (issues (gh-viewer-repo-issues repo t))
          (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
          (query (cdr (assoc query-name gh-viewer-issue-queries)))
          (pulls (gh-viewer-pull-request-remove-issues issues)))
