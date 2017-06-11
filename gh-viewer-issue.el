@@ -24,6 +24,7 @@
 
 ;;; Code:
 (require 'gh)
+(require 'gh-viewer-util)
 (require 'gh-viewer-repo)
 
 (defcustom gh-viewer-issue-queries nil
