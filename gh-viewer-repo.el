@@ -158,8 +158,8 @@
   (with-slots (watch-issues-timer) repo
     (when (timerp watch-issues-timer) (cancel-timer watch-issues-timer))
     (setq watch-issues-timer
-          (run-with-idle-timer gh-viewer-repo-watch-idle-time t
-                               #'(lambda () (gh-viewer-repo--watch-issues repo))))
+          (run-at-time t gh-viewer-repo-watch-idle-time
+                       #'(lambda () (gh-viewer-repo--watch-issues repo))))
     (message "Started timer: %s" (gh-viewer-repo-to-string repo))))
 
 (defmethod gh-viewer-repo-notify-new-pull-request-p ((repo gh-viewer-repo))
