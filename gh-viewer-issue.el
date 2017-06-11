@@ -147,42 +147,37 @@
                    (cl-remove-if-not query issues))))
       (gh-viewer-repo-issues repo #'display))))
 
-(defmethod gh-viewer-issue-notify-new-issue-p ((issue gh-issues-issue) repo)
-  (if (gh-viewer-pull-request-p issue)
-      (gh-viewer-repo-notify-new-pull-request-p repo)
-    (gh-viewer-repo-notify-new-issue-p repo)))
-
 (defmethod gh-viewer-issue-notification-message ((issue gh-issues-issue))
   (with-slots (number title) issue
     (format "#%s %s by %s"
             number title (gh-viewer-issue-user-name issue))))
 
-(defmethod gh-viewer-issue-notify-new-issue ((issue gh-issues-issue) repo)
-  (and (gh-viewer-issue-notify-new-issue-p issue repo)
-       (let* ((repo-name (gh-viewer-repo-to-string repo))
-              (title (if (gh-viewer-pull-request-p issue)
-                         (format "New Pull Request in %s" repo-name)
-                       (format "New Issue in %s" repo-name))))
-         (alert (gh-viewer-issue-notification-message issue)
-                :title title))))
-
 (defmethod gh-viewer-issue-equal-p ((issue gh-issues-issue) other)
   (equal (gh-issues--issue-id issue)
          (gh-issues--issue-id other)))
 
-(defmethod gh-viewer-issue-notify-updated-issue-p ((issue gh-issues-issue) repo)
-  (if (gh-viewer-pull-request-p issue)
-      (gh-viewer-repo-notify-updated-pull-request-p repo)
-    (gh-viewer-repo-notify-updated-issue-p repo)))
-
-(defmethod gh-viewer-issue-notify-updated-issue ((issue gh-issues-issue) repo)
-  (and (gh-viewer-issue-notify-updated-issue-p issue repo)
-       (let* ((repo-name (gh-viewer-repo-to-string repo))
-              (title (if (gh-viewer-pull-request-p issue)
-                         (format "Pull Request Updated in %s" repo-name)
-                       (format "Issue Updated in %s" repo-name))))
-         (alert (gh-viewer-issue-notification-message issue)
-                :title title))))
+(defmethod gh-viewer-issue-changes ((issue gh-issues-issue) old)
+  (cl-labels
+      ((build-props
+        (issue)
+        (with-slots
+            (state title body user labels assignees milestone comments updated-at) issue
+          (list (cons "state" state)
+                (cons "title" title)
+                (cons "body" body)
+                (cons "user" user)
+                (cons "labels" labels)
+                (cons "assignees" assignees)
+                (cons "milestone" milestone)
+                (cons "comments" comments)
+                (cons "updated-at" updated-at)))))
+    (let ((props (build-props issue))
+          (old-props (build-props old)))
+      (cl-remove-if #'(lambda (prop)
+                        (equal (cdr prop)
+                               (cdr (cl-assoc (car prop) old-props
+                                              :test #'string=))))
+                    props))))
 
 (provide 'gh-viewer-issue)
 ;;; gh-viewer-issue.el ends here

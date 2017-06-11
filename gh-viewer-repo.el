@@ -42,10 +42,8 @@
    (issues :initarg :issues :initform nil)
    (old-issues :initform nil)
    (watch-issues-timer :initform nil)
-   (notify-new-issue :initarg :notify-new-issue :initform nil)
-   (notify-new-pull-request :initarg :notify-new-pull-request :initform nil)
-   (notify-updated-issue :initarg :notify-updated-issue :initform nil)
-   (notify-updated-pull-request :initarg :notify-updated-pull-request :initform nil)))
+   (notifier :initarg :notifier :initform nil)
+   ))
 
 (defmethod gh-viewer-repo-equalp ((repo gh-viewer-repo) other)
   (and (string= (oref repo user) (oref other user))
@@ -53,16 +51,10 @@
 
 ;;;###autoload
 (cl-defun gh-viewer-add-repo (user repo &key
-                                   (notify-new-issue nil)
-                                   (notify-new-pull-request nil)
-                                   (notify-updated-issue nil)
-                                   (notify-updated-pull-request nil))
+                                   (notifier #'gh-viewer-repo-default-notifier))
   (let ((repo (make-instance 'gh-viewer-repo
                              :user user :repo repo
-                             :notify-new-issue notify-new-issue
-                             :notify-new-pull-request notify-new-pull-request
-                             :notify-updated-issue notify-updated-issue
-                             :notify-updated-pull-request notify-updated-pull-request
+                             :notifier notifier
                              )))
     (setq gh-viewer-repos
           (cl-remove-if #'(lambda (e) (gh-viewer-repo-equalp repo e))
@@ -105,29 +97,6 @@
           (fetch-issues))
       (funcall cb (oref repo issues)))))
 
-(defmethod gh-viewer-repo-new-issues ((repo gh-viewer-repo))
-  (let ((old-issues (oref repo old-issues))
-        (new-issues (oref repo issues)))
-    (if (< 0 (length old-issues))
-        (cl-remove-if #'(lambda (e) (cl-find-if #'(lambda (f) (gh-viewer-issue-equal-p e f))
-                                                old-issues))
-                      new-issues))))
-
-(defmethod gh-viewer-repo-updated-issues ((repo gh-viewer-repo))
-  (let ((old-issues (oref repo old-issues))
-        (new-issues (oref repo issues)))
-    (if (< 0 (length old-issues))
-        (cl-remove-if #'(lambda (new-issue)
-                          (let ((old-issue (cl-find-if #'(lambda (e)
-                                                           (gh-viewer-issue-equal-p e new-issue))
-                                                       old-issues)))
-                            (and old-issue
-                                 (not (string< (gh-viewer-convert-unix-time-string
-                                                (oref old-issue updated-at))
-                                               (gh-viewer-convert-unix-time-string
-                                                (oref new-issue updated-at)))))))
-                      new-issues))))
-
 ;;;###autoload
 (defun gh-viewer-repo-start-watch-issues ()
   (interactive)
@@ -143,25 +112,39 @@
                              (message "Stopped timer: %s" (gh-viewer-repo-to-string repo)))))
         gh-viewer-repos))
 
+(defun gh-viewer-repo-default-notifier (repo issues)
+  "ISSUES: '((new-issue . old-issue)... (new-issue . nil))."
+  (mapc #'(lambda (issue)
+            (let ((notification (gh-viewer-notification-create (car issue) (cdr issue) repo)))
+              (when notification
+                (gh-viewer-notification-notify notification))))
+        issues))
+
 (defmethod gh-viewer-repo--watch-issues ((repo gh-viewer-repo))
   (cl-labels
       ((notify (_issues)
-               (let ((new-issues (gh-viewer-repo-new-issues repo))
-                     (updated-issues (gh-viewer-repo-updated-issues repo)))
-                 (mapc #'(lambda (e) (gh-viewer-issue-notify-new-issue e repo))
-                       new-issues)
-                 (mapc #'(lambda (e) (gh-viewer-issue-notify-updated-issue e repo))
-                       updated-issues))))
+               (let* ((old-issues (oref repo old-issues))
+                      (new-issues (oref repo issues))
+                      (issues (cl-loop for new-issue in new-issues
+                                       collect (cons new-issue
+                                                     (cl-find-if #'(lambda (old-issue)
+                                                                     (gh-viewer-issue-equal-p new-issue old-issue))
+                                                                 old-issues))))
+                      (notifier (oref repo notifier)))
+                 (when (functionp notifier)
+                   (funcall notifier repo issues)))))
     (gh-viewer-repo-issues repo #'notify t)))
 
 (defmethod gh-viewer-repo-watch-issues ((repo gh-viewer-repo))
   (with-slots (watch-issues-timer) repo
     (when (timerp watch-issues-timer) (cancel-timer watch-issues-timer))
-    (setq watch-issues-timer
-          (run-at-time t gh-viewer-repo-watch-idle-time
-                       #'(lambda () (gh-viewer-repo--watch-issues repo))))
-    (gh-viewer-repo--watch-issues repo)
-    (message "Started timer: %s" (gh-viewer-repo-to-string repo))))
+    (cl-labels
+        ((set-timer (issue)
+                    (setq watch-issues-timer
+                          (run-at-time t gh-viewer-repo-watch-idle-time
+                                       #'(lambda () (gh-viewer-repo--watch-issues repo))))))
+      (gh-viewer-repo-issues repo #'set-timer t)
+      (message "Started timer: %s" (gh-viewer-repo-to-string repo)))))
 
 (defmethod gh-viewer-repo-notify-new-pull-request-p ((repo gh-viewer-repo))
   (oref repo notify-new-pull-request))
