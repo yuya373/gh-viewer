@@ -38,17 +38,20 @@
 
 (defmethod gh-viewer-pull-request-p ((issue gh-issues-issue))
   (with-slots (pull-request) issue
-    (slot-boundp pull-request 'html-url)))
+    (and (slot-boundp pull-request 'html-url)
+         (not (string= "unbound" (oref pull-request html-url))))))
 
 ;;;###autoload
 (defun gh-viewer-pull-request (&optional invalidate-cache)
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (issues (gh-viewer-repo-issues repo invalidate-cache))
-         (pulls (gh-viewer-pull-request-remove-issues issues))
          (buf (gh-viewer-pull-request--create-buffer repo)))
-    (oset repo issues issues)
-    (gh-viewer-pull-request-render buf pulls)))
+    (cl-labels
+        ((display (issues)
+                  (gh-viewer-pull-request-render
+                   buf
+                   (gh-viewer-pull-request-remove-issues issues))))
+      (gh-viewer-repo-issues repo #'display invalidate-cache))))
 
 (defun gh-viewer-pull-request-render (buf pulls)
   (if (eq 0 (length pulls))
@@ -81,13 +84,15 @@
 (defun gh-viewer-pull-request-filtered ()
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (issues (gh-viewer-repo-issues repo t))
          (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
-         (query (cdr (assoc query-name gh-viewer-issue-queries)))
-         (pulls (gh-viewer-pull-request-remove-issues issues)))
-    (gh-viewer-pull-request-render
-     (gh-viewer-pull-request--create-buffer repo)
-     (cl-remove-if-not query pulls))))
+         (query (cdr (assoc query-name gh-viewer-issue-queries))))
+    (cl-labels
+        ((display (issues)
+                  (gh-viewer-pull-request-render
+                   (gh-viewer-pull-request--create-buffer repo)
+                   (cl-remove-if-not query
+                                     (gh-viewer-pull-request-remove-issues issues)))))
+      (gh-viewer-repo-issues repo #'display t))))
 
 
 (provide 'gh-viewer-pull-request)
