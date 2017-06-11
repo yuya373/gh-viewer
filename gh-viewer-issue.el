@@ -86,7 +86,7 @@
   (oref (oref issue user) login))
 
 (defmethod gh-viewer-issue-issue-to-string ((issue gh-issues-issue))
-  (let* ((title (format "#%s [%s]\t%s"
+  (let* ((title (format "#%s [%s] %s"
                         (oref issue number)
                         (oref issue state)
                         (propertize (oref issue title)
