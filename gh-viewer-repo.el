@@ -38,6 +38,7 @@
   ((user :initarg :user :type string)
    (repo :initarg :repo :type string)
    (users :initarg :users :initform nil)
+   (issues-last-fetched :initform 0)
    (issues :initarg :issues :initform nil)
    (old-issues :initform nil)
    (watch-issues-timer :initform nil)
@@ -93,13 +94,16 @@
                          )
                       #'(lambda (response)
                           (oset repo issues (oref response data))
-                          (funcall cb (oref repo issues))))))
-    (let ((cache (oref repo issues)))
-      (if (or invalidate-cache (< (length cache) 1))
-          (progn
-            (oset repo old-issues (oref repo issues))
-            (fetch-issues))
-        (funcall cb (oref repo issues))))))
+                          (oset repo issues-last-fetched (time-to-seconds))
+                          (funcall cb (oref repo issues)))))
+       (cache-invalid-p ()
+                        (or invalidate-cache
+                            (< 120 (- (time-to-seconds) (oref repo issues-last-fetched))))))
+    (if (cache-invalid-p)
+        (progn
+          (oset repo old-issues (oref repo issues))
+          (fetch-issues))
+      (funcall cb (oref repo issues)))))
 
 (defmethod gh-viewer-repo-new-issues ((repo gh-viewer-repo))
   (let ((old-issues (oref repo old-issues))
