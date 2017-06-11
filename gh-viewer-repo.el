@@ -113,13 +113,16 @@
   (let ((old-issues (oref repo old-issues))
         (new-issues (oref repo issues)))
     (if (< 0 (length old-issues))
-        (cl-remove-if-not #'(lambda (new-issue)
-                              (let ((old-issue (cl-find-if #'(lambda (e)
-                                                               (gh-viewer-issue-equal-p e new-issue))
-                                                           old-issues)))
-                                (string< (gh-viewer-convert-unix-time-string (oref old-issue updated-at))
-                                         (gh-viewer-convert-unix-time-string (oref new-issue updated-at)))))
-                          new-issues))))
+        (cl-remove-if #'(lambda (new-issue)
+                          (let ((old-issue (cl-find-if #'(lambda (e)
+                                                           (gh-viewer-issue-equal-p e new-issue))
+                                                       old-issues)))
+                            (and old-issue
+                                 (not (string< (gh-viewer-convert-unix-time-string
+                                                (oref old-issue updated-at))
+                                               (gh-viewer-convert-unix-time-string
+                                                (oref new-issue updated-at)))))))
+                      new-issues))))
 
 ;;;###autoload
 (defun gh-viewer-repo-start-watch-issues ()
