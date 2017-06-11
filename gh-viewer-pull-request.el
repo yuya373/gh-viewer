@@ -92,7 +92,7 @@
                    (gh-viewer-pull-request--create-buffer repo)
                    (cl-remove-if-not query
                                      (gh-viewer-pull-request-remove-issues issues)))))
-      (gh-viewer-repo-issues repo #'display t))))
+      (gh-viewer-repo-issues repo #'display))))
 
 
 (provide 'gh-viewer-pull-request)
