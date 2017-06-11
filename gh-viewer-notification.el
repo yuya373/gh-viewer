@@ -87,10 +87,25 @@
 
 (defmethod gh-viewer-notification-message
   ((notification gh-viewer-notification))
-  (with-slots (number title) (oref notification issue)
-    (format "#%s %s by %s"
-            number title
-            (gh-viewer-notification-issue-username notification))))
+  (with-slots (issue changes) notification
+    (let ((base (format "#%s %s by %s"
+                        (oref issue number) (oref issue title)
+                        (gh-viewer-notification-issue-username notification)))
+          (changes-str (and changes
+                            (mapconcat #'(lambda (change)
+                                           (cl-labels
+                                               ((format-value (value)
+                                                              (or (and (listp value) (mapconcat #'identity value ", "))
+                                                                  value)))
+                                             (let ((label (car change))
+                                                   (from (and (cadr change) (format-value (cadr change))))
+                                                   (to (and (cddr change) (format-value (cddr change)))))
+                                               (cond
+                                                ((null from) (format "%s: none -> %s" label to))
+                                                ((null to) (format "%s: %s -> none" label from))
+                                                (t (format "%s: %s -> %s" label from to))))))
+                                       changes "\n"))))
+      (format "%s%s" base (or (and changes (format "\n%s" changes-str)) "")))))
 
 (defmethod gh-viewer-notification-notify
   ((notification gh-viewer-notification))

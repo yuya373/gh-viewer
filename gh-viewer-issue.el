@@ -126,10 +126,13 @@
       (goto-char (point-min)))
     (display-buffer buf)))
 
+(defmethod gh-viewer-issue-assignees ((issue gh-issues-issue))
+  (mapcar #'(lambda (user) (oref user login))
+          (oref issue assignees)))
+
 (defun gh-viewer-issue-assignee-equal-p (issue assignee)
-  (cl-find-if #'(lambda (user)
-                  (string= assignee (oref user login)))
-              (oref issue assignees)))
+  (cl-find-if #'(lambda (login) (string= assignee login))
+              (gh-viewer-issue-assignees issue)))
 
 (defun gh-viewer-issue-user-equal-p (issue user)
   (string= user (gh-viewer-issue-user-name issue)))
@@ -156,28 +159,34 @@
   (equal (gh-issues--issue-id issue)
          (gh-issues--issue-id other)))
 
+(defmethod gh-viewer-issue-labels ((issue gh-issues-issue))
+  (mapcar #'(lambda (label) (oref label name))
+          (oref issue labels)))
+
 (defmethod gh-viewer-issue-changes ((issue gh-issues-issue) old)
   (cl-labels
       ((build-props
         (issue)
         (with-slots
-            (state title body user labels assignees milestone comments updated-at) issue
+            (state title body user milestone comments updated-at) issue
           (list (cons "state" state)
                 (cons "title" title)
                 (cons "body" body)
                 (cons "user" user)
-                (cons "labels" labels)
-                (cons "assignees" assignees)
-                (cons "milestone" milestone)
-                (cons "comments" comments)
-                (cons "updated-at" updated-at)))))
+                (cons "labels" (gh-viewer-issue-labels issue))
+                (cons "assignees" (gh-viewer-issue-assignees issue))
+                (cons "milestone" (oref milestone title))
+                (cons "comments" comments)))))
     (let ((props (build-props issue))
           (old-props (build-props old)))
-      (cl-remove-if #'(lambda (prop)
-                        (equal (cdr prop)
-                               (cdr (cl-assoc (car prop) old-props
-                                              :test #'string=))))
-                    props))))
+      (cl-remove-if #'null
+                    (mapcar #'(lambda (prop)
+                                (let ((new-value (cdr prop))
+                                      (old-value (cdr (cl-assoc (car prop) old-props
+                                                                :test #'string=))))
+                                  (unless (equal new-value old-value)
+                                    (cons (car prop) (cons old-value new-value)))))
+                            props)))))
 
 (provide 'gh-viewer-issue)
 ;;; gh-viewer-issue.el ends here
