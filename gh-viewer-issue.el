@@ -24,6 +24,7 @@
 
 ;;; Code:
 (require 'gh)
+(require 'gh-viewer-util)
 (require 'gh-viewer-repo)
 
 (defcustom gh-viewer-issue-queries nil
@@ -70,12 +71,13 @@
 (defun gh-viewer-issue (&optional invalidate-cache)
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (issues (issues (gh-viewer-repo-issues repo invalidate-cache)))
          (buf (gh-viewer-issue--create-buffer repo)))
-    (oset repo issues issues)
-    (gh-viewer-issue-render
-     buf
-     (cl-remove-if #'gh-viewer-pull-request-p issues))))
+    (cl-labels
+        ((display (issues)
+                  (gh-viewer-issue-render
+                   buf
+                   (cl-remove-if #'gh-viewer-pull-request-p issues))))
+      (gh-viewer-repo-issues repo #'display invalidate-cache))))
 
 (defun gh-viewer-issue-propertize-issue-property (prop-name)
   (propertize prop-name 'face 'gh-viewer-issue-property-name-face))
@@ -84,7 +86,7 @@
   (oref (oref issue user) login))
 
 (defmethod gh-viewer-issue-issue-to-string ((issue gh-issues-issue))
-  (let* ((title (format "#%s [%s]\t%s"
+  (let* ((title (format "#%s [%s] %s"
                         (oref issue number)
                         (oref issue state)
                         (propertize (oref issue title)
@@ -136,12 +138,51 @@
 (defun gh-viewer-issue-filtered ()
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (issues (gh-viewer-repo-issues repo t))
          (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
          (query (cdr (assoc query-name gh-viewer-issue-queries))))
-    (gh-viewer-issue-render
-     (gh-viewer-issue--create-buffer repo)
-     (cl-remove-if-not query issues))))
+    (cl-labels
+        ((display (issues)
+                  (gh-viewer-issue-render
+                   (gh-viewer-issue--create-buffer repo)
+                   (cl-remove-if-not query issues))))
+      (gh-viewer-repo-issues repo #'display))))
+
+(defmethod gh-viewer-issue-notify-new-issue-p ((issue gh-issues-issue) repo)
+  (if (gh-viewer-pull-request-p issue)
+      (gh-viewer-repo-notify-new-pull-request-p repo)
+    (gh-viewer-repo-notify-new-issue-p repo)))
+
+(defmethod gh-viewer-issue-notification-message ((issue gh-issues-issue))
+  (with-slots (number title) issue
+    (format "#%s %s by %s"
+            number title (gh-viewer-issue-user-name issue))))
+
+(defmethod gh-viewer-issue-notify-new-issue ((issue gh-issues-issue) repo)
+  (and (gh-viewer-issue-notify-new-issue-p issue repo)
+       (let* ((repo-name (gh-viewer-repo-to-string repo))
+              (title (if (gh-viewer-pull-request-p issue)
+                         (format "New Pull Request in %s" repo-name)
+                       (format "New Issue in %s" repo-name))))
+         (alert (gh-viewer-issue-notification-message issue)
+                :title title))))
+
+(defmethod gh-viewer-issue-equal-p ((issue gh-issues-issue) other)
+  (equal (gh-issues--issue-id issue)
+         (gh-issues--issue-id other)))
+
+(defmethod gh-viewer-issue-notify-updated-issue-p ((issue gh-issues-issue) repo)
+  (if (gh-viewer-pull-request-p issue)
+      (gh-viewer-repo-notify-updated-pull-request-p repo)
+    (gh-viewer-repo-notify-updated-issue-p repo)))
+
+(defmethod gh-viewer-issue-notify-updated-issue ((issue gh-issues-issue) repo)
+  (and (gh-viewer-issue-notify-updated-issue-p issue repo)
+       (let* ((repo-name (gh-viewer-repo-to-string repo))
+              (title (if (gh-viewer-pull-request-p issue)
+                         (format "Pull Request Updated in %s" repo-name)
+                       (format "Issue Updated in %s" repo-name))))
+         (alert (gh-viewer-issue-notification-message issue)
+                :title title))))
 
 (provide 'gh-viewer-issue)
 ;;; gh-viewer-issue.el ends here

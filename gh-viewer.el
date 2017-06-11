@@ -24,9 +24,6 @@
 
 ;;; Code:
 
-(defun gh-viewer-format-time-string (time-string)
-  (format-time-string "%Y-%m-%d %H:%M:%S" (date-to-time time-string)))
-
 (require 'gh-viewer-repo)
 (require 'gh-viewer-pull-request)
 (require 'gh-viewer-issue)
@@ -39,7 +36,6 @@
    (cons "Filtered Issues"  'gh-viewer-issue-filtered))
   "Feature alist passed to `completing-read'."
   :group 'gh-viewer)
-
 
 ;;;###autoload
 (defun gh-viewer ()
