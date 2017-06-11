@@ -147,7 +147,9 @@
         ((display (issues)
                   (gh-viewer-issue-render
                    (gh-viewer-issue--create-buffer repo)
-                   (cl-remove-if-not query issues))))
+                   (cl-remove-if-not #'(lambda (issue) (and (not (gh-viewer-pull-request-p issue))
+                                                            (funcall query issue)))
+                                     issues))))
       (gh-viewer-repo-issues repo #'display))))
 
 (defmethod gh-viewer-issue-notification-message ((issue gh-issues-issue))
