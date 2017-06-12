@@ -70,12 +70,11 @@
 ;;;###autoload
 (defun gh-viewer-issue (&optional invalidate-cache)
   (interactive)
-  (let* ((repo (gh-viewer-repo-select))
-         (buf (gh-viewer-issue--create-buffer repo)))
+  (let* ((repo (gh-viewer-repo-select)))
     (cl-labels
         ((display (issues)
                   (gh-viewer-issue-render
-                   buf
+                   repo
                    (cl-remove-if #'gh-viewer-pull-request-p issues))))
       (gh-viewer-repo-issues repo #'display invalidate-cache))))
 
@@ -113,18 +112,63 @@
    'url (oref issue html-url)
    'keymap gh-viewer-issue-keymap))
 
-(defun gh-viewer-issue-render (buf issues)
-  (if (eq 0 (length issues))
-      (error "No Issues")
+(defmethod gh-viewer-issue-comment-buffer-name ((issue gh-issues-issue) repo)
+  (format "*Gh-Viewer: %s Issue: %s - Comments*"
+          (gh-viewer-repo-to-string repo)
+          (oref issue title)))
+
+(defmethod gh-viewer-issue-comment-to-string ((comment gh-comment))
+  (with-slots (body user updated-at created-at) comment
+    (let ((header (format "%s%s"
+                          (propertize (oref user login) 'face '(:height 1.2 :underline t :weight bold :foreground "#FFA000"))
+                          (propertize (format " commented at %s" (gh-viewer-format-time-string updated-at))
+                                      'face '(:underline t :foreground "#FFA000")))))
+      (format "%s\n\n%s\n" header (replace-regexp-in-string "" "" body)))))
+
+(defmethod gh-viewer-issue-open-comment-buffer ((issue gh-issues-issue) repo)
+  (let* ((response (gh-issues-comments-list (gh-issues-api :sync nil :cache nil)
+                                            (oref repo user) (oref repo repo)
+                                            (oref issue number)))
+         (comments (oref response data))
+         (buf (get-buffer-create (gh-viewer-issue-comment-buffer-name issue repo))))
     (with-current-buffer buf
       (setq buffer-read-only nil)
-      (mapc #'(lambda (issue)
-                (insert (gh-viewer-issue-propertize-issue issue))
-                (insert "\n"))
-            issues)
+      (erase-buffer)
+      (mapc #'(lambda (comment)
+                (insert (gh-viewer-issue-comment-to-string comment))
+                (insert "\n\n"))
+            comments)
       (setq buffer-read-only t)
       (goto-char (point-min)))
     (display-buffer buf)))
+
+(defmethod gh-viewer-issue-view-comments-button ((issue gh-issues-issue) repo)
+  (if (< 0 (oref issue comments))
+      (cl-labels
+          ((open-comment-buffer ()
+                                (interactive)
+                                (gh-viewer-issue-open-comment-buffer issue repo)))
+        (propertize "[View Comments]\n"
+                    'face '(:underline t)
+                    'keymap (let ((map (make-sparse-keymap)))
+                              (define-key map (kbd "RET") #'open-comment-buffer)
+                              map)))
+    ""))
+
+(defun gh-viewer-issue-render (repo issues)
+  (if (eq 0 (length issues))
+      (error "No Issues")
+    (let ((buf (gh-viewer-issue--create-buffer repo)))
+      (with-current-buffer buf
+        (setq buffer-read-only nil)
+        (mapc #'(lambda (issue)
+                  (insert (gh-viewer-issue-propertize-issue issue))
+                  (insert (gh-viewer-issue-view-comments-button issue repo))
+                  (insert "\n"))
+              issues)
+        (setq buffer-read-only t)
+        (goto-char (point-min)))
+      (display-buffer buf))))
 
 (defmethod gh-viewer-issue-assignees ((issue gh-issues-issue))
   (mapcar #'(lambda (user) (oref user login))
@@ -146,7 +190,7 @@
     (cl-labels
         ((display (issues)
                   (gh-viewer-issue-render
-                   (gh-viewer-issue--create-buffer repo)
+                   repo
                    (cl-remove-if-not #'(lambda (issue) (and (not (gh-viewer-pull-request-p issue))
                                                             (funcall query issue)))
                                      issues))))

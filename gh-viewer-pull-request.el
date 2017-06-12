@@ -44,27 +44,28 @@
 ;;;###autoload
 (defun gh-viewer-pull-request (&optional invalidate-cache)
   (interactive)
-  (let* ((repo (gh-viewer-repo-select))
-         (buf (gh-viewer-pull-request--create-buffer repo)))
+  (let* ((repo (gh-viewer-repo-select)))
     (cl-labels
         ((display (issues)
                   (gh-viewer-pull-request-render
-                   buf
+                   repo
                    (gh-viewer-pull-request-remove-issues issues))))
       (gh-viewer-repo-issues repo #'display invalidate-cache))))
 
-(defun gh-viewer-pull-request-render (buf pulls)
+(defun gh-viewer-pull-request-render (repo pulls)
   (if (eq 0 (length pulls))
       (error "No Pull Requests")
-    (with-current-buffer buf
-      (setq buffer-read-only nil)
-      (mapc #'(lambda (pr)
-                (insert (gh-viewer-issue-propertize-issue pr))
-                (insert "\n"))
-            pulls)
-      (setq buffer-read-only t)
-      (goto-char (point-min)))
-    (display-buffer buf)))
+    (let ((buf (gh-viewer-pull-request--create-buffer repo)))
+      (with-current-buffer buf
+        (setq buffer-read-only nil)
+        (mapc #'(lambda (pr)
+                  (insert (gh-viewer-issue-propertize-issue pr))
+                  (insert (gh-viewer-issue-view-comments-button pr repo))
+                  (insert "\n"))
+              pulls)
+        (setq buffer-read-only t)
+        (goto-char (point-min)))
+      (display-buffer buf))))
 
 (defun gh-viewer-pull-request-remove-issues (issues)
   (cl-remove-if #'(lambda (issue)
@@ -77,7 +78,7 @@
          (pulls (gh-viewer-pull-request-remove-issues (oref repo issues)))
          (assignee (read-from-minibuffer "Input Assignee: ")))
     (gh-viewer-pull-request-render
-     (gh-viewer-pull-request--create-buffer repo)
+     repo
      (gh-viewer-issue--filter-by-assignee pulls assignee))))
 
 ;;;###autoload
@@ -89,7 +90,7 @@
     (cl-labels
         ((display (issues)
                   (gh-viewer-pull-request-render
-                   (gh-viewer-pull-request--create-buffer repo)
+                   repo
                    (cl-remove-if-not query
                                      (gh-viewer-pull-request-remove-issues issues)))))
       (gh-viewer-repo-issues repo #'display))))
