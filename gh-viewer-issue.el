@@ -24,6 +24,7 @@
 
 ;;; Code:
 (require 'gh)
+(require 'emojify)
 (require 'gh-viewer-util)
 (require 'gh-viewer-repo)
 
@@ -134,6 +135,7 @@
     (with-current-buffer buf
       (setq buffer-read-only nil)
       (erase-buffer)
+      (emojify-mode)
       (mapc #'(lambda (comment)
                 (insert (gh-viewer-issue-comment-to-string comment))
                 (insert "\n\n"))
