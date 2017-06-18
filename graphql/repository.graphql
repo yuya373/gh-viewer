@@ -1,0 +1,96 @@
+query repository(
+  $owner: String!, $name: String!,
+  $pullRequestAfter: String,
+  $reviewRequestAfter: String,
+  $reviewsAfter: String,
+  $reviewCommentsAfter: String,
+  $asigneesAfter: String
+  $labelsAfter: String,
+  $commentsAfter: String
+) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(first: 20, after: $pullRequestAfter) {
+      nodes {
+        assignees(first: 20, after: $asigneesAfter) {
+          nodes {
+            avatarUrl
+            login
+            url
+          }
+        }
+        labels(first: 20, after: $labelsAfter) {
+          nodes {
+            color
+            name
+          }
+          pageInfo {
+            ...pageInfo
+          }
+        }
+        comments(first: 20, after: $commentsAfter) {
+          nodes {
+            ...comment
+          }
+          pageInfo {
+            ...pageInfo
+          }
+        }
+        number
+        title
+        bodyText
+        headRefName
+        baseRefName
+        mergeable
+        merged
+        mergedAt
+        reviewRequests(first: 20, after: $reviewRequestAfter) {
+          nodes {
+            reviewer {
+              avatarUrl
+              login
+              url
+            }
+          }
+          pageInfo {
+            ...pageInfo
+          }
+          totalCount
+        }
+        reviews(first: 20, after: $reviewsAfter) {
+          nodes {
+            comments(first: 20, after: $reviewCommentsAfter) {
+              nodes {
+                ...comment
+                bodyText
+                # reactionGroups {
+                # }
+              }
+            }
+            ...comment
+            bodyText
+            state
+          }
+          pageInfo {
+            ...pageInfo
+          }
+        }
+      }
+      pageInfo {
+        ...pageInfo
+      }
+      totalCount
+    }
+  }
+}
+
+fragment pageInfo on PageInfo {
+  endCursor
+  hasNextPage
+}
+
+fragment comment on Comment {
+  author
+  publishedAt
+  editor
+  lastEditedAt
+}
