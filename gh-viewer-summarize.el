@@ -44,9 +44,7 @@
   (cl-labels
       ((open ()
              (interactive)
-             (gh-viewer-buffer-display-pull-request
-              (gh-viewer-find-pull-request repo (oref pr id))
-              repo)))
+             (gh-viewer-buffer-display pr repo)))
     (with-slots (title number state comments published-at author) pr
       (let ((header (format "#%s [%s] %s" number state title))
             (info (format "created by %s at %s"
@@ -68,6 +66,9 @@
 
 (defmethod gh-viewer-summarize ((conn ggc:pull-request-connection) repo)
   (mapconcat #'(lambda (e) (gh-viewer-summarize e repo)) (oref conn nodes) "\n\n"))
+
+(defmethod gh-viewer-summarize ((conn ggc:issue-comment-connection))
+  (mapconcat #'gh-viewer-stringify (last (oref conn nodes) 5) "\n\n"))
 
 (provide 'gh-viewer-summarize)
 ;;; gh-viewer-summarize.el ends here

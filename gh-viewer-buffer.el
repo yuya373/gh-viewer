@@ -37,13 +37,29 @@
   (format " * %s - Pull Requests *"
           (gh-viewer-stringify-short repo)))
 
-(defmethod gh-viewer-buffer-display-pull-request ((pr ggc:pull-request) repo)
+(defmethod gh-viewer-buffer-name ((_conn ggc:issue-comment-connection) pr repo)
+  (format " * %s - %s - Comments *"
+          (gh-viewer-stringify-short repo)
+          (gh-viewer-stringify-short pr)))
+
+(defmethod gh-viewer-buffer-display ((pr ggc:pull-request) repo)
   (let ((buf (get-buffer-create (gh-viewer-buffer-name pr repo))))
     (with-current-buffer buf
       (setq buffer-read-only nil)
       (erase-buffer)
       (goto-char (point-min))
-      (insert (gh-viewer-stringify pr))
+      (insert (gh-viewer-stringify pr repo))
+      (setq buffer-read-only t)
+      (goto-char (point-min)))
+    (display-buffer buf)))
+
+(defmethod gh-viewer-buffer-display ((conn ggc:issue-comment-connection) pr repo)
+  (let ((buf (get-buffer-create (gh-viewer-buffer-name conn pr repo))))
+    (with-current-buffer buf
+      (setq buffer-read-only nil)
+      (erase-buffer)
+      (goto-char (point-min))
+      (insert (gh-viewer-stringify conn))
       (setq buffer-read-only t)
       (goto-char (point-min)))
     (display-buffer buf)))

@@ -85,38 +85,54 @@
 (defmethod gh-viewer-format-section-title ((title string))
   (propertize title 'face 'gh-viewer-pull-request-section-title))
 
-(defmethod gh-viewer-stringify ((pr ggc:pull-request))
-  (let ((assignees (let ((str (gh-viewer-stringify (oref pr assignees))))
-                     (or (and (gh-viewer-blank? str) "")
-                         (format "%s %s\n"
-                                 (gh-viewer-format-section-title "Assignees:")
-                                 str))))
-        (labels (let ((str (gh-viewer-stringify (oref pr labels))))
-                  (or (and (gh-viewer-blank? str) "")
-                      (format "%s %s\n"
-                              (gh-viewer-format-section-title "Labels:")
-                              str))))
-        (comments (let ((str (gh-viewer-stringify (oref pr comments))))
+(defmethod gh-viewer-stringify ((pr ggc:pull-request) repo)
+  (cl-labels
+      ((open-comments ()
+                      (interactive)
+                      (gh-viewer-buffer-display (oref pr comments) pr repo)))
+    (let ((assignees (let ((str (gh-viewer-stringify (oref pr assignees))))
+                       (or (and (gh-viewer-blank? str) "")
+                           (format "%s %s\n"
+                                   (gh-viewer-format-section-title "Assignees:")
+                                   str))))
+          (labels (let ((str (gh-viewer-stringify (oref pr labels))))
                     (or (and (gh-viewer-blank? str) "")
-                        (format "%s\n%s\n"
-                                (gh-viewer-format-section-title "Comments:")
+                        (format "%s %s\n"
+                                (gh-viewer-format-section-title "Labels:")
                                 str))))
+          (comments (let ((str (gh-viewer-summarize (oref pr comments))))
+                      (or (and (gh-viewer-blank? str) "")
+                          (let ((total (oref (oref pr comments) total-count))
+                                (max 5))
+                            (format "%s%s\n%s\n%s\n"
+                                    (gh-viewer-format-section-title (format "%s Comments:" total))
+                                    (if (< max total)
+                                        (format " displaying last %s comments" max)
+                                      "")
+                                    str
+                                    (if (< max total)
+                                        (propertize "\n[Load More Comments]"
+                                                    'face '(:underline t)
+                                                    'keymap (let ((map (make-sparse-keymap)))
+                                                              (define-key map (kbd "RET") #'open-comments)
+                                                              map))
+                                      ""))))))
 
-        (title (propertize (format "#%s %s [%s]\n" (oref pr number) (oref pr title) (oref pr state))
-                           'face 'gh-viewer-pull-request-title))
-        ;; (review-requests (gh-viewer-stringify
-        ;;                   (oref pr review-requests)))
-        ;; (reviews (gh-viewer-stringify (oref pr reviews)))
-        (body (format "%s\n\n" (oref pr body)))
-        ;; (head-ref (oref pr head-ref-name))
-        ;; (base-ref (oref pr base-ref-name))
-        )
-    (format "%s%s%s\n%s%s%s"
-            title labels assignees labels body comments)))
+          (title (propertize (format "#%s %s [%s]\n" (oref pr number) (oref pr title) (oref pr state))
+                             'face 'gh-viewer-pull-request-title))
+          ;; (review-requests (gh-viewer-stringify
+          ;;                   (oref pr review-requests)))
+          ;; (reviews (gh-viewer-stringify (oref pr reviews)))
+          (body (format "%s\n\n" (oref pr body)))
+          ;; (head-ref (oref pr head-ref-name))
+          ;; (base-ref (oref pr base-ref-name))
+          )
+      (format "%s%s%s\n%s%s%s"
+              title labels assignees labels body comments))))
 
-(defmethod gh-viewer-stringify ((conn ggc:pull-request-connection))
+(defmethod gh-viewer-stringify ((conn ggc:pull-request-connection) repo)
   (with-slots (nodes) conn
-    (mapconcat #'gh-viewer-stringify nodes "\n")))
+    (mapconcat #'(lambda (e) (gh-viewer-stringify e repo)) nodes "\n")))
 
 
 
