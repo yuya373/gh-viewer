@@ -1,21 +1,34 @@
 query repository(
-  $owner: String!, $name: String!,
-  $pullRequestAfter: String,
+  $owner: String!,
+  $name: String!,
+  $pullRequestStates: [PullRequestState!],
+  $pullRequestOrderField: IssueOrderField!,
+  $pullRequestOrderDirection: OrderDirection!,
+  $pullRequestBefore: String,
   $reviewRequestAfter: String,
   $reviewsAfter: String,
   $reviewCommentsAfter: String,
-  $asigneesAfter: String
+  $assigneesAfter: String,
   $labelsAfter: String,
   $commentsAfter: String
 ) {
   repository(owner: $owner, name: $name) {
-    pullRequests(first: 20, after: $pullRequestAfter) {
+    id
+    name
+    nameWithOwner
+    pullRequests(
+      last: 20,
+      before: $pullRequestBefore,
+      states: $pullRequestStates,
+      orderBy: { field: $pullRequestOrderField, direction: $pullRequestOrderDirection }
+    ) {
       nodes {
-        assignees(first: 20, after: $asigneesAfter) {
+        assignees(first: 20, after: $assigneesAfter) {
           nodes {
-            avatarUrl
-            login
-            url
+            ...actor
+          }
+          pageInfo {
+            ...pageInfo
           }
         }
         labels(first: 20, after: $labelsAfter) {
@@ -34,21 +47,12 @@ query repository(
           pageInfo {
             ...pageInfo
           }
+          totalCount
         }
-        number
-        title
-        bodyText
-        headRefName
-        baseRefName
-        mergeable
-        merged
-        mergedAt
         reviewRequests(first: 20, after: $reviewRequestAfter) {
           nodes {
             reviewer {
-              avatarUrl
-              login
-              url
+              ...actor
             }
           }
           pageInfo {
@@ -61,19 +65,30 @@ query repository(
             comments(first: 20, after: $reviewCommentsAfter) {
               nodes {
                 ...comment
-                bodyText
                 # reactionGroups {
                 # }
               }
             }
             ...comment
-            bodyText
             state
           }
           pageInfo {
             ...pageInfo
           }
         }
+        id
+        number
+        title
+        author
+        headRefName
+        baseRefName
+        mergeable
+        merged
+        mergedAt
+        state
+        url
+        publishedAt
+        ...comment
       }
       pageInfo {
         ...pageInfo
@@ -89,8 +104,19 @@ fragment pageInfo on PageInfo {
 }
 
 fragment comment on Comment {
-  author
+  body
+  author {
+    ...actor
+  }
   publishedAt
-  editor
+  editor {
+    ...actor
+  }
   lastEditedAt
+}
+
+fragment actor on Actor {
+  avatarUrl
+  login
+  url
 }

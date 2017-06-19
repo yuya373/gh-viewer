@@ -28,6 +28,10 @@
 (require 'gh-viewer-pull-request)
 (require 'gh-viewer-issue)
 (require 'gh-viewer-notification)
+(require 'gh-viewer-graphql)
+(require 'gh-viewer-stringify)
+(require 'gh-viewer-finder)
+(require 'gh-viewer-buffer)
 
 (defcustom gh-viewer-completing-read-alist
   (list
@@ -50,6 +54,22 @@
       (error "Select one feature"))
     (funcall fun)))
 
+
+(defun gh-viewer--pull-request ()
+  (interactive)
+  (let* ((repo (gh-viewer-select-repository))
+         (pull-requests (oref repo pull-requests))
+         (buf (get-buffer-create (gh-viewer-buffer-name pull-requests repo))))
+    (with-current-buffer buf
+      (markdown-mode)
+      (setq buffer-read-only nil)
+      (setq fill-column 80)
+      (erase-buffer)
+      (goto-char (point-min))
+      (insert (gh-viewer-summarize pull-requests repo))
+      (setq buffer-read-only t)
+      (goto-char (point-min)))
+    (display-buffer buf)))
 
 
 (provide 'gh-viewer)
