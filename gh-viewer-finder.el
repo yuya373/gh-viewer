@@ -28,14 +28,6 @@
 (require 'github-graphql-client)
 (require 'gh-viewer-graphql)
 
-(defun gh-viewer-select-repository ()
-  (let* ((alist (mapcar #'(lambda (e) (cons (gh-viewer-stringify-short e)
-                                            (oref e id)))
-                        gh-viewer-graphql-repositories))
-         (selected (completing-read "Select Repository: " alist))
-         (id (cdr (cl-assoc selected alist :test #'string=))))
-    (gh-viewer-find-repository id)))
-
 (defmethod gh-viewer-select ((conn ggc:pull-request-connection))
   (let* ((alist (gh-viewer-comp-read-alist conn))
          (selected (completing-read "Select Pull Request: " alist))
@@ -56,7 +48,7 @@
     (cl-find-if #'(lambda (pr) (string= (oref pr id) id))
                 nodes)))
 
-(defun gh-viewer-find-repository (id)
+(defmethod gh-viewer-find-repository ((id string))
   (cl-find-if #'(lambda (e) (string= (oref e id) id))
               gh-viewer-graphql-repositories))
 

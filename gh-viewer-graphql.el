@@ -215,12 +215,8 @@
                               :name-with-owner (plist-get repository :nameWithOwner)
                               :owner owner
                               :pull-requests pull-requests))
-         (existing (gh-viewer-find-repository id)))
-    (if existing
-        (gh-viewer-merge existing repo)
-      (setq gh-viewer-graphql-repositories
-            (cons repo gh-viewer-graphql-repositories))
-      repo)))
+         )
+    repo))
 
 (defmethod gh-viewer-equal-p ((comment ggc:issue-comment) other)
   (string= (oref comment id) (oref other id)))
@@ -228,42 +224,45 @@
 (defmethod gh-viewer-equal-p ((pr ggc:pull-request) other)
   (string= (oref pr id) (oref other id)))
 
-(defmethod gh-viewer-merge ((base ggc:repository) other)
+(defmethod gh-viewer-merge ((base ggc:repository) other &optional ignore-new-flag)
   (oset base name (oref other name))
   (oset base owner (oref other owner))
   (oset base name-with-owner (oref other name))
   (oset base pull-requests (gh-viewer-merge
                             (oref base pull-requests)
-                            (oref other pull-requests)))
+                            (oref other pull-requests)
+                            ignore-new-flag))
   base)
 
-(defmethod gh-viewer-merge ((new-comment gh-viewer-issue-comment) old-comment)
-  (if old-comment
-      (oset new-comment new (oref old-comment new))
-    (oset new-comment new t)))
+(defmethod gh-viewer-merge ((new-comment gh-viewer-issue-comment) old-comment &optional ignore-new-flag)
+  (unless ignore-new-flag
+    (if old-comment
+        (oset new-comment new (oref old-comment new))
+      (oset new-comment new t))))
 
-(defmethod gh-viewer-merge ((base gh-viewer-issue-comment-connection) old)
+(defmethod gh-viewer-merge ((base gh-viewer-issue-comment-connection) old &optional ignore-new-flag)
   (let ((old-comments (oref old nodes))
         (new-comments (oref base nodes)))
     (cl-loop for new-comment in new-comments
              do (let ((old-comment (cl-find-if #'(lambda (e) (gh-viewer-equal-p new-comment e))
                                                old-comments)))
-                  (gh-viewer-merge new-comment old-comment)))
+                  (gh-viewer-merge new-comment old-comment ignore-new-flag)))
 
     (mapc #'(lambda (e) (cl-pushnew e new-comments :test #'gh-viewer-equal-p))
           old-comments)
 
-    (if (or (oref old has-new-comments) (cl-find-if #'(lambda (e) (oref e new)) new-comments))
+    (if (and (not ignore-new-flag)
+             (or (oref old has-new-comments) (cl-find-if #'(lambda (e) (oref e new)) new-comments)))
         (oset base has-new-comments t))))
 
-(defmethod gh-viewer-merge ((pr gh-viewer-pull-request) old)
+(defmethod gh-viewer-merge ((pr gh-viewer-pull-request) old &optional ignore-new-flag)
   (if old
       (progn
-        (oset pr new (oref old new))
-        (gh-viewer-merge (oref pr comments) (oref old comments)))
-    (oset pr new t)))
+        (and (not ignore-new-flag) (oset pr new (oref old new)))
+        (gh-viewer-merge (oref pr comments) (oref old comments) ignore-new-flag))
+    (and (not ignore-new-flag) (oset pr new t))))
 
-(defmethod gh-viewer-merge ((base ggc:pull-request-connection) other)
+(defmethod gh-viewer-merge ((base ggc:pull-request-connection) other &optional ignore-new-flag)
   (oset base page-info (oref other page-info))
   (let ((old-pull-requests (oref base nodes))
         (new-pull-requests (oref other nodes)))
@@ -271,7 +270,7 @@
         (oset base nodes new-pull-requests)
       (cl-loop for pr in new-pull-requests
                do (let ((old (cl-find-if #'(lambda (e) (gh-viewer-equal-p pr e)) old-pull-requests)))
-                    (gh-viewer-merge pr old)))
+                    (gh-viewer-merge pr old ignore-new-flag)))
 
       (mapc #'(lambda (pr) (cl-pushnew pr new-pull-requests :test #'gh-viewer-equal-p))
             old-pull-requests)
@@ -306,16 +305,22 @@
                          (cons "pullRequestOrderField" pull-request-order-field)
                          (cons "pullRequestOrderDirection" pull-request-order-direction))))
     (cl-labels
-        ((on-success (data)
-                     (let ((repo (gh-viewer-graphql-initialize-repository
-                                  (plist-get (plist-get data :data) :repository))))
+        ((on-success (data base pull-request-before)
+                     (let* ((repo (gh-viewer-graphql-initialize-repository
+                                   (plist-get (plist-get data :data) :repository))))
+
+                       (when base
+                         (gh-viewer-merge base repo t)
+                         (setq repo base))
+
                        (if (gh-viewer-has-more (oref repo pull-requests)
                                                pull-request-order-direction)
-                           (fetch (gh-viewer-next-cursor (oref repo pull-requests)
+                           (fetch repo
+                                  (gh-viewer-next-cursor (oref repo pull-requests)
                                                          pull-request-order-direction))
-
                          (when (functionp success)
-                           (funcall success repo)))))
+                           (funcall success repo)))
+                       ))
          (on-error (data)
                    (message (format "%s" (plist-get data :errors)))
                    (when (functionp error)
@@ -324,10 +329,10 @@
                         (message (format "%s" error-thrown))
                         (when (functionp http-error)
                           (funcall http-error error-thrown)))
-         (fetch (&optional pull-request-before)
+         (fetch (&optional base pull-request-before)
                 (github-graphql-client-request
                  query token
-                 :success #'on-success
+                 :success #'(lambda (data) (on-success data base pull-request-before))
                  :error #'on-error
                  :http-error #'on-http-error
                  :variables (if pull-request-before

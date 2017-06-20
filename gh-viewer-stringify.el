@@ -170,10 +170,10 @@
                         (format "%s %s\n"
                                 (gh-viewer-format-section-title "Labels:")
                                 str))))
-          (comments (let ((str (gh-viewer-summarize (oref pr comments))))
+          (comments (let ((str (gh-viewer-stringify (oref pr comments))))
                       (or (and (gh-viewer-blank? str) "")
-                          (let ((total (oref (oref pr comments) total-count))
-                                (max 5))
+                          (let* ((total (oref (oref pr comments) total-count))
+                                 (max total))
                             (format "%s%s\n%s\n%s\n"
                                     (gh-viewer-format-section-title (format "%s Comments:" total))
                                     (if (< max total)

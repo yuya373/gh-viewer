@@ -155,19 +155,19 @@
 
 (cl-defmethod gh-viewer-fetch ((repo gh-viewer-repo) &optional success error)
   (cl-labels
-      ((on-success (repository)
-                   (oset repo repository repository)
+      ((on-success (new-repository)
+
+                   (if (oref repo repository)
+                       (gh-viewer-merge (oref repo repository) new-repository)
+                     (oset repo repository new-repository))
+
                    (oset repo last-fetched (time-to-seconds))
                    (when (functionp success)
-                     (funcall success repository)))
+                     (funcall success (oref repo repository))))
        (on-error (errors) (message "Errors: %s" errors))
        )
     (gh-viewer-fetch-repository (oref repo owner) (oref repo name)
                                 :success #'on-success :error error)))
-
-(defmethod gh-viewer-fetch ((repo ggc:repository) success error)
-  (gh-viewer-fetch-repository (oref (oref repo owner) login) (oref repo name)
-                              :success success :error error))
 
 (defmethod gh-viewer-use-cache-p ((repo gh-viewer-repo))
   (and (oref repo repository)
