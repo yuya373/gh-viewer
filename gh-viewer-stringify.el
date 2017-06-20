@@ -25,6 +25,7 @@
 ;;; Code:
 
 (require 'eieio)
+(require 'parse-time)
 (require 'github-graphql-client)
 
 (defface gh-viewer-pull-request-title
