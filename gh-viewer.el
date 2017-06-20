@@ -30,6 +30,7 @@
 (require 'gh-viewer-notification)
 (require 'gh-viewer-graphql)
 (require 'gh-viewer-stringify)
+(require 'gh-viewer-summarize)
 (require 'gh-viewer-finder)
 (require 'gh-viewer-buffer)
 

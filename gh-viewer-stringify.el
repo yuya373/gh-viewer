@@ -36,13 +36,33 @@
   :group 'gh-viewer)
 
 (defface gh-viewer-pull-request-section-title
-  '((t (:weight bold :height 1.2 :underline t)))
+  '((t (:foreground "#859900"
+                    :weight bold
+                    :height 1.0)))
   "Face used to Pull Request section title"
   :group 'gh-viewer)
 
 (defface gh-viewer-pull-request-comment-separator
   '((t (:underline t)))
   "Face used to Pull Request comment separator"
+  :group 'gh-viewer)
+
+(defface gh-viewer-issue-comment-header-login
+  '((t (:foreground "#2aa198"
+                    :underline t
+                    :weight bold)))
+  "Face used to Issue Comment header login"
+  :group 'gh-viewer)
+
+(defface gh-viewer-issue-comment-header-datetime
+  '((t (:underline t)))
+  "Face used to Issue Comment header datetime"
+  :group 'gh-viewer)
+
+(defface gh-viewer-clickable
+  '((t (:foreground "#FFA000"
+                    :underline t)))
+  "Face used to RET key aware text"
   :group 'gh-viewer)
 
 (defmethod gh-viewer-blank? ((str string))
@@ -69,27 +89,77 @@
   (with-slots (nodes) conn
     (mapconcat #'gh-viewer-stringify nodes ", ")))
 
+(defmethod gh-viewer-stringify ((time-string string))
+  (format-time-string "%Y-%m-%d %H:%M:%S" (parse-iso8601-time-string time-string)))
+
 (defmethod gh-viewer-stringify ((comment ggc:issue-comment))
   (with-slots (author published-at body) comment
-    (format "%s  %s\n%s"
-            (gh-viewer-stringify author)
-            published-at
-            body)))
+    (let ((header (format "%s%s"
+                          (propertize (gh-viewer-stringify author)
+                                      'face 'gh-viewer-issue-comment-header-login)
+                          (propertize (format "  %s"(gh-viewer-stringify published-at))
+                                      'face 'gh-viewer-issue-comment-header-datetime))))
+      (format "%s\n%s" header body))))
 
 (defmethod gh-viewer-stringify ((conn ggc:issue-comment-connection))
   (with-slots (nodes) conn
-    (mapconcat #'gh-viewer-stringify nodes
-               (format "\n\n%s\n\n" (propertize "                        "
-                                                'face 'gh-viewer-pull-request-comment-separator)))))
+    (mapconcat #'gh-viewer-stringify nodes "\n\n")))
+
+(defmethod gh-viewer-stringify ((rr ggc:review-request))
+  (format "requested a review from %s" (gh-viewer-stringify (oref rr reviewer))))
+
+(defmethod gh-viewer-stringify ((conn ggc:review-request-connection))
+  (mapconcat #'gh-viewer-stringify (oref conn nodes) "\n"))
+
+(defface gh-viewer-review-state-changes-requested
+  '((t (:underline t :inherit error)))
+  "Face used to Review State Changes Requested"
+  :group 'gh-viewer)
+
+(defface gh-viewer-review-state-approved
+  '((t (:foreground "#268bd2" :underline t)))
+  "Face used to Review State Approved"
+  :group 'gh-viewer)
+
+(defface gh-viewer-review-state-commented
+  '((t (:underline t)))
+  "Face used to Review State Commented"
+  :group 'gh-viewer)
+
+(defmethod gh-viewer-stringify ((review ggc:pull-request-review))
+  (let* ((state (oref review state))
+         (header (format "%s%s%s"
+                         (propertize (format "%s "
+                                             (gh-viewer-stringify (oref review author)))
+                                     'face 'gh-viewer-issue-comment-header-login)
+                         (propertize (format "%s" state)
+                                     'face (cond
+                                            ((cl-typep state 'ggc:approved)
+                                             'gh-viewer-review-state-approved)
+                                            ((cl-typep state 'ggc:commented)
+                                             'gh-viewer-review-state-commented)
+                                            ((cl-typep state 'ggc:changes-requested)
+                                             'gh-viewer-review-state-changes-requested)))
+                         (propertize (format " %s"
+                                             (gh-viewer-format-time-string (oref review published-at)))
+                                     'face 'gh-viewer-issue-comment-header-datetime))))
+    (format "%s\n%s" header (oref review body))))
+
+(defmethod gh-viewer-stringify ((conn ggc:pull-request-review-connection))
+  (mapconcat #'gh-viewer-stringify (oref conn nodes) "\n\n"))
 
 (defmethod gh-viewer-format-section-title ((title string))
   (propertize title 'face 'gh-viewer-pull-request-section-title))
+
 
 (defmethod gh-viewer-stringify ((pr ggc:pull-request) repo)
   (cl-labels
       ((open-comments ()
                       (interactive)
-                      (gh-viewer-buffer-display (oref pr comments) pr repo)))
+                      (gh-viewer-buffer-display (oref pr comments) pr repo))
+       (browse-pull-request ()
+                            (interactive)
+                            (browse-url (oref pr url))))
     (let ((assignees (let ((str (gh-viewer-stringify (oref pr assignees))))
                        (or (and (gh-viewer-blank? str) "")
                            (format "%s %s\n"
@@ -111,24 +181,37 @@
                                       "")
                                     str
                                     (if (< max total)
-                                        (propertize "\n[Load More Comments]"
-                                                    'face '(:underline t)
-                                                    'keymap (let ((map (make-sparse-keymap)))
-                                                              (define-key map (kbd "RET") #'open-comments)
-                                                              map))
+                                        (format "\n%s\n"
+                                                (propertize "[Load More Comments]"
+                                                            'face 'gh-viewer-clickable
+                                                            'keymap (let ((map (make-sparse-keymap)))
+                                                                      (define-key map (kbd "RET") #'open-comments)
+                                                                      map)))
                                       ""))))))
 
-          (title (propertize (format "#%s %s [%s]\n" (oref pr number) (oref pr title) (oref pr state))
-                             'face 'gh-viewer-pull-request-title))
-          ;; (review-requests (gh-viewer-stringify
-          ;;                   (oref pr review-requests)))
-          ;; (reviews (gh-viewer-stringify (oref pr reviews)))
+          (title (propertize (format "%s\n" (oref pr title))
+                             'face 'gh-viewer-pull-request-title
+                             'keymap (let ((map (make-sparse-keymap)))
+                                       (define-key map (kbd "RET") #'browse-pull-request)
+                                       map)))
+          (author (gh-viewer-stringify (oref pr author)))
+          (info
+           (format "%s wants to merge into %s from %s\n"
+                   (gh-viewer-stringify (oref pr author))
+                   (oref pr base-ref-name)
+                   (oref pr head-ref-name)))
+          (review-requests (let ((str (gh-viewer-stringify (oref pr review-requests))))
+                             (or (and (gh-viewer-blank? str) "")
+                                 (format "%s\n%s" (gh-viewer-format-section-title "Review Requests:")
+                                         str))))
+          (reviews (let ((str (gh-viewer-stringify (oref pr reviews))))
+                     (or (and (gh-viewer-blank? str) "")
+                         (format "%s\n%s" (gh-viewer-format-section-title "Reviews:")
+                                 str))))
           (body (format "%s\n\n" (oref pr body)))
-          ;; (head-ref (oref pr head-ref-name))
-          ;; (base-ref (oref pr base-ref-name))
           )
-      (format "%s%s%s\n%s%s%s"
-              title labels assignees labels body comments))))
+      (format "%s%s%s%s%s\n%s%s%s%s"
+              title info labels assignees review-requests labels body comments reviews))))
 
 (defmethod gh-viewer-stringify ((conn ggc:pull-request-connection) repo)
   (with-slots (nodes) conn

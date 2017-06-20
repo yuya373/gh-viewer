@@ -56,8 +56,12 @@
 
 (defun gh-viewer-graphql-initialize-page-info (page-info)
   (make-instance 'ggc:page-info
+                 :has-previous-page (gh-viewer-graphql-handle-json-boolean
+                                     (plist-get page-info :hasPreviousPage))
+                 :start-cursor (plist-get page-info :startCursor)
                  :end-cursor (plist-get page-info :endCursor)
-                 :has-next-page (gh-viewer-graphql-handle-json-boolean (plist-get page-info :has-next-page))))
+                 :has-next-page (gh-viewer-graphql-handle-json-boolean
+                                 (plist-get page-info :hasNextPage))))
 
 (defun gh-viewer-graphql-initialize-connection (connection node-builder class)
   (let ((nodes (mapcar node-builder (plist-get connection :nodes)))
@@ -111,14 +115,16 @@
                                            'ggc:issue-comment-connection))
 
 (defun gh-viewer-graphql-initialize-review-request (review-request)
-  (let ((reviewer (gh-viewer-graphql-initialize-user (plist-get review-request :reviewer))))
+  (let ((reviewer (gh-viewer-graphql-initialize-user
+                   (plist-get review-request :reviewer))))
     (make-instance 'ggc:review-request
                    :reviewer reviewer)))
 
 (defun gh-viewer-graphql-initialize-review-request-connection (review-requests)
-  (gh-viewer-graphql-initialize-connection review-requests
-                                           #'gh-viewer-graphql-initialize-review-request
-                                           'ggc:review-request-connection))
+  (gh-viewer-graphql-initialize-connection
+   review-requests
+   #'gh-viewer-graphql-initialize-review-request
+   'ggc:review-request-connection))
 
 (defun gh-viewer-graphql-initialize-pull-request-review (pull-request-review)
   (apply #'make-instance 'ggc:pull-request-review
@@ -180,18 +186,65 @@
           (plist-get pull-requests :totalCount))
     conn))
 
+(defun gh-viewer-graphql-initialize-repository-owner (owner)
+  (make-instance 'ggc:repository-owner
+                 :avatar-url (plist-get owner :avatarUrl)
+                 :login (plist-get owner :login)
+                 :url (plist-get owner :url)))
+
 (defun gh-viewer-graphql-initialize-repository (repository)
-  (let* ((pull-requests (gh-viewer-graphql-initialize-pull-request-connection (plist-get repository :pullRequests)))
+  (let* ((pull-requests (gh-viewer-graphql-initialize-pull-request-connection
+                         (plist-get repository :pullRequests)))
+         (owner (gh-viewer-graphql-initialize-repository-owner
+                 (plist-get repository :owner)))
+         (id (plist-get repository :id))
          (repo (make-instance 'ggc:repository
-                              :id (plist-get repository :id)
+                              :id id
                               :name (plist-get repository :name)
                               :name-with-owner (plist-get repository :nameWithOwner)
-                              :pull-requests pull-requests
-                              )))
-    (setq gh-viewer-graphql-repositories
-          (cons repo (cl-remove-if #'(lambda (e) (string= (oref e id)
-                                                          (oref repo id)))
-                                   gh-viewer-graphql-repositories)))))
+                              :owner owner
+                              :pull-requests pull-requests))
+         (existing (gh-viewer-find-repository id)))
+    (if existing
+        (gh-viewer-merge existing repo)
+      (setq gh-viewer-graphql-repositories
+            (cons repo gh-viewer-graphql-repositories))
+      repo)))
+
+(defmethod gh-viewer-merge ((base ggc:repository) other)
+  (oset base name (oref other name))
+  (oset base owner (oref other owner))
+  (oset base name-with-owner (oref other name))
+  (oset base pull-requests (gh-viewer-merge
+                            (oref base pull-requests)
+                            (oref other pull-requests)))
+  base)
+
+(defmethod gh-viewer-merge ((base ggc:pull-request-connection) other)
+  (oset base page-info (oref other page-info))
+  (mapc #'(lambda (pr) (cl-pushnew pr (oref base nodes) :test #'equal))
+        (oref other nodes))
+  (oset base nodes
+        (cl-remove-if #'(lambda (pr)
+                          (cl-find-if #'(lambda (new-pr) (eq (oref new-pr number)
+                                                             (oref pr number)))
+                                      (oref other nodes)))
+                      (oref base nodes)))
+  (oset base nodes (cl-sort (append (oref base nodes) (oref other nodes))
+                            #'> :key #'(lambda (pr) (oref pr number))))
+  base)
+
+(defmethod gh-viewer-has-more ((conn ggc:pull-request-connection) direction)
+  (with-slots (page-info) conn
+    (if (string= direction "DESC")
+        (oref page-info has-previous-page)
+      (oref page-info has-next-page))))
+
+(defmethod gh-viewer-next-cursor ((conn ggc:pull-request-connection) direction)
+  (with-slots (page-info) conn
+    (if (string= direction "DESC")
+        (oref page-info start-cursor)
+      (oref page-info end-cursor))))
 
 (cl-defun gh-viewer-fetch-repository (owner name &key
                                             (success nil)
@@ -209,10 +262,15 @@
                          (cons "pullRequestOrderDirection" pull-request-order-direction))))
     (cl-labels
         ((on-success (data)
-                     (gh-viewer-graphql-initialize-repository
-                      (plist-get (plist-get data :data) :repository))
-                     (when (functionp success)
-                       (funcall success)))
+                     (let ((repo (gh-viewer-graphql-initialize-repository
+                                  (plist-get (plist-get data :data) :repository))))
+                       (if (gh-viewer-has-more (oref repo pull-requests)
+                                               pull-request-order-direction)
+                           (fetch (gh-viewer-next-cursor (oref repo pull-requests)
+                                                         pull-request-order-direction))
+
+                         (when (functionp success)
+                           (funcall success repo)))))
          (on-error (data)
                    (message (format "%s" (plist-get data :errors)))
                    (when (functionp error)
@@ -220,14 +278,18 @@
          (on-http-error (&key error-thrown &allow-other-keys)
                         (message (format "%s" error-thrown))
                         (when (functionp http-error)
-                          (funcall http-error error-thrown))))
-      (github-graphql-client-request query token
-                                     :success #'on-success
-                                     :error #'on-error
-                                     :http-error #'on-http-error
-                                     :variables variables))))
-
-(gh-viewer-fetch-repository "rebaseinc" "instabase")
+                          (funcall http-error error-thrown)))
+         (fetch (&optional pull-request-before)
+                (github-graphql-client-request
+                 query token
+                 :success #'on-success
+                 :error #'on-error
+                 :http-error #'on-http-error
+                 :variables (if pull-request-before
+                                (cons (cons "pullRequestBefore" pull-request-before)
+                                      variables)
+                              variables))))
+      (fetch))))
 
 (provide 'gh-viewer-graphql)
 ;;; gh-viewer-graphql.el ends here

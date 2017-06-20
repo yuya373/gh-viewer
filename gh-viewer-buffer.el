@@ -42,6 +42,12 @@
           (gh-viewer-stringify-short repo)
           (gh-viewer-stringify-short pr)))
 
+(defun gh-viewer-setup-buffer (buf)
+  (with-current-buffer buf
+    (setq buffer-read-only nil)
+    (erase-buffer)
+    (goto-char (point-min))))
+
 (defmethod gh-viewer-buffer-display ((pr ggc:pull-request) repo)
   (let ((buf (get-buffer-create (gh-viewer-buffer-name pr repo))))
     (with-current-buffer buf
@@ -63,6 +69,17 @@
       (setq buffer-read-only t)
       (goto-char (point-min)))
     (display-buffer buf)))
+
+(defmethod gh-viewer-buffer-display ((conn ggc:pull-request-connection) repo)
+  (if (not (< 0 (length (oref conn nodes))))
+      (message "No Pull Request in %s" (oref repo name-with-owner))
+    (let ((buf (get-buffer-create (gh-viewer-buffer-name conn repo))))
+      (gh-viewer-setup-buffer buf)
+      (with-current-buffer buf
+        (insert (gh-viewer-stringify conn repo))
+        (setq buffer-read-only t)
+        (goto-char (point-min)))
+      (display-buffer buf))))
 
 (provide 'gh-viewer-buffer)
 ;;; gh-viewer-buffer.el ends here

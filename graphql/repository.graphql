@@ -16,6 +16,11 @@ query repository(
     id
     name
     nameWithOwner
+    owner {
+      avatarUrl
+      login
+      url
+    }
     pullRequests(
       last: 20,
       before: $pullRequestBefore,
@@ -99,8 +104,10 @@ query repository(
 }
 
 fragment pageInfo on PageInfo {
+  startCursor
   endCursor
   hasNextPage
+  hasPreviousPage
 }
 
 fragment comment on Comment {

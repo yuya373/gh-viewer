@@ -86,15 +86,23 @@
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
          (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
-         (query (cdr (assoc query-name gh-viewer-issue-queries))))
+         (filter (cdr (assoc query-name gh-viewer-issue-queries))))
     (cl-labels
-        ((display (issues)
-                  (gh-viewer-pull-request-render
-                   repo
-                   (cl-remove-if-not query
-                                     (gh-viewer-pull-request-remove-issues issues)))))
-      (gh-viewer-repo-issues repo #'display))))
+        ((display (repository)
 
+                  (let ((pull-request (gh-viewer-select
+                                       (gh-viewer-filter-pull-request
+                                        (oref repository pull-requests)
+                                        filter))))
+                    (gh-viewer-buffer-display pull-request repository))
+                  ;; (gh-viewer-buffer-display (gh-viewer-filter-pull-request
+                  ;;                            (oref repository pull-requests)
+                  ;;                            filter)
+                  ;;                           repository)
+                  ))
+      (if (gh-viewer-use-cache-p repo)
+         (display (oref repo repository))
+        (gh-viewer-fetch repo #'display)))))
 
 (provide 'gh-viewer-pull-request)
 ;;; gh-viewer-pull-request.el ends here

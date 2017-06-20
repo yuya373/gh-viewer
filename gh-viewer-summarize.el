@@ -36,7 +36,7 @@
   :group 'gh-viewer)
 
 (defface gh-viewer-pull-request-summary-info
-  '((t (:weight :height 0.9)))
+  '((t (:height 0.9)))
   "Face used to Pull Request summary info"
   :group 'gh-viewer)
 

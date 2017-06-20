@@ -25,7 +25,7 @@
 ;;; Code:
 (require 'eieio)
 (require 'gh)
-(require 'async)
+(require 'github-graphql-client)
 
 (defvar gh-viewer-repos nil)
 (defvar gh-viewer-load-path load-path)
@@ -35,26 +35,21 @@
   :group 'gh-viewer)
 
 (defclass gh-viewer-repo ()
-  ((user :initarg :user :type string)
-   (repo :initarg :repo :type string)
-   (users :initarg :users :initform nil)
-   (issues-last-fetched :initform 0)
-   (issues :initarg :issues :initform nil)
-   (old-issues :initform nil)
-   (watch-issues-timer :initform nil)
-   (notifier :initarg :notifier :initform nil)
-   ))
+  ((owner :initarg :owner :type string)
+   (name :initarg :name :type string)
+   (repository :initarg :repository :initform nil :type (or null ggc:repository))
+   (last-fetched :initarg :last-fetched :initform 0)))
 
 (defmethod gh-viewer-repo-equalp ((repo gh-viewer-repo) other)
-  (and (string= (oref repo user) (oref other user))
-       (string= (oref repo repo) (oref other repo))))
+  (and (string= (oref repo owner) (oref other owner))
+       (string= (oref repo name) (oref other name))))
 
 ;;;###autoload
-(cl-defun gh-viewer-add-repo (user repo &key
-                                   (notifier #'gh-viewer-repo-default-notifier))
+(cl-defun gh-viewer-add-repo (owner name &key
+                                    (notifier #'gh-viewer-repo-default-notifier))
   (let ((repo (make-instance 'gh-viewer-repo
-                             :user user :repo repo
-                             :notifier notifier
+                             :owner owner :name name
+                             ;; :notifier notifier
                              )))
     (setq gh-viewer-repos
           (cl-remove-if #'(lambda (e) (gh-viewer-repo-equalp repo e))
@@ -62,7 +57,7 @@
     (push repo gh-viewer-repos)))
 
 (defmethod gh-viewer-repo-to-string ((repo gh-viewer-repo))
-  (format "%s/%s" (oref repo user) (oref repo repo)))
+  (format "%s/%s" (oref repo owner) (oref repo name)))
 
 (defun gh-viewer-repo-select ()
   (let* ((alist (mapcar #'(lambda (e) (cons (gh-viewer-repo-to-string e) e))
@@ -122,7 +117,7 @@
 
 (defmethod gh-viewer-repo--watch-issues ((repo gh-viewer-repo))
   (cl-labels
-      ((notify (_issues)
+      ((notify ()
                (let* ((old-issues (oref repo old-issues))
                       (new-issues (oref repo issues))
                       (issues (cl-loop for new-issue in new-issues
@@ -133,7 +128,7 @@
                       (notifier (oref repo notifier)))
                  (when (functionp notifier)
                    (funcall notifier repo issues)))))
-    (gh-viewer-repo-issues repo #'notify t)))
+    (gh-viewer-fetch repo #'notify)))
 
 (defmethod gh-viewer-repo-watch-issues ((repo gh-viewer-repo))
   (with-slots (watch-issues-timer) repo
@@ -157,6 +152,26 @@
 
 (defmethod gh-viewer-repo-notify-updated-issue-p ((repo gh-viewer-repo))
   (oref repo notify-updated-issue))
+
+(cl-defmethod gh-viewer-fetch ((repo gh-viewer-repo) &optional success error)
+  (cl-labels
+      ((on-success (repository)
+                   (oset repo repository repository)
+                   (oset repo last-fetched (time-to-seconds))
+                   (when (functionp success)
+                     (funcall success repository)))
+       (on-error (errors) (message "Errors: %s" errors))
+       )
+    (gh-viewer-fetch-repository (oref repo owner) (oref repo name)
+                                :success #'on-success :error error)))
+
+(defmethod gh-viewer-fetch ((repo ggc:repository) success error)
+  (gh-viewer-fetch-repository (oref (oref repo owner) login) (oref repo name)
+                              :success success :error error))
+
+(defmethod gh-viewer-use-cache-p ((repo gh-viewer-repo))
+  (and (oref repo repository)
+       (< (- (time-to-seconds) (oref repo last-fetched)) (* 60 5))))
 
 (provide 'gh-viewer-repo)
 ;;; gh-viewer-repo.el ends here
