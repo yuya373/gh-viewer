@@ -32,6 +32,7 @@
 (require 'gh-viewer-stringify)
 (require 'gh-viewer-summarize)
 (require 'gh-viewer-finder)
+(require 'gh-viewer-filter)
 (require 'gh-viewer-buffer)
 
 (defcustom gh-viewer-completing-read-alist
