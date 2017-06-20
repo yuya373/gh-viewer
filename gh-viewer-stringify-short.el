@@ -25,12 +25,23 @@
 ;;; Code:
 (require 'eieio)
 (require 'github-graphql-client)
+(require 'gh-viewer-graphql)
 
 (defmethod gh-viewer-stringify-short ((pr ggc:pull-request))
   (with-slots (number state title comments) pr
     (let ((comments-count (format "%2d" (oref comments total-count)))
-          (author (format "by %s" (gh-viewer-stringify (oref pr author)))))
-      (format "#%s [%s] [%s] %s %s" (format "%4d" number) state comments-count (propertize title 'face 'bold) author))))
+          (author (format "by %s" (gh-viewer-stringify (oref pr author))))
+          (new (if (oref pr new)
+                   (propertize "*" 'face 'error)
+                 " ")))
+      (format "%s #%s [%s] [%s] %s %s"
+              new
+              (format "%4d" number)
+              state
+              (if (oref (oref pr comments) has-new-comments)
+                  (propertize comments-count 'face 'error)
+                comments-count)
+              (propertize title 'face 'bold) author))))
 
 (defmethod gh-viewer-stringify-short ((repo ggc:repository))
   (oref repo name-with-owner))

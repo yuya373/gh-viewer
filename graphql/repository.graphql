@@ -47,6 +47,7 @@ query repository(
         }
         comments(first: 20, after: $commentsAfter) {
           nodes {
+            id
             ...comment
           }
           pageInfo {

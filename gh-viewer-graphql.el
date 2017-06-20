@@ -31,6 +31,15 @@
 (defclass gh-viewer-repositories ()
   ((repositories :initarg :repositories :initform nil :type list)))
 
+(defclass gh-viewer-pull-request (ggc:pull-request)
+  ((new :initform nil :type boolean)))
+
+(defclass gh-viewer-issue-comment (ggc:issue-comment)
+  ((new :initform nil :type boolean)))
+
+(defclass gh-viewer-issue-comment-connection (ggc:issue-comment-connection)
+  ((has-new-comments :initform nil :type boolean)))
+
 (defvar gh-viewer-graphql-repositories nil)
 
 (defcustom gh-viewer-token nil
@@ -107,12 +116,14 @@
                                            'ggc:label-connection))
 
 (defun gh-viewer-graphql-initialize-issue-comment (comment)
-  (apply #'make-instance 'ggc:issue-comment (gh-viewer-graphql-comment-props comment)))
+  (apply #'make-instance 'gh-viewer-issue-comment
+         :id (plist-get comment :id)
+         (gh-viewer-graphql-comment-props comment)))
 
 (defun gh-viewer-graphql-initialize-issue-comment-connection (comments)
   (gh-viewer-graphql-initialize-connection comments
                                            #'gh-viewer-graphql-initialize-issue-comment
-                                           'ggc:issue-comment-connection))
+                                           'gh-viewer-issue-comment-connection))
 
 (defun gh-viewer-graphql-initialize-review-request (review-request)
   (let ((reviewer (gh-viewer-graphql-initialize-user
@@ -151,7 +162,7 @@
         (reviews
          (gh-viewer-graphql-initialize-pull-request-review-connection
           (plist-get pull-request :reviews))))
-    (make-instance 'ggc:pull-request
+    (make-instance 'gh-viewer-pull-request
                    :assignees assignees
                    :labels labels
                    :comments comments
@@ -211,6 +222,12 @@
             (cons repo gh-viewer-graphql-repositories))
       repo)))
 
+(defmethod gh-viewer-equal-p ((comment ggc:issue-comment) other)
+  (string= (oref comment id) (oref other id)))
+
+(defmethod gh-viewer-equal-p ((pr ggc:pull-request) other)
+  (string= (oref pr id) (oref other id)))
+
 (defmethod gh-viewer-merge ((base ggc:repository) other)
   (oset base name (oref other name))
   (oset base owner (oref other owner))
@@ -220,18 +237,46 @@
                             (oref other pull-requests)))
   base)
 
+(defmethod gh-viewer-merge ((new-comment gh-viewer-issue-comment) old-comment)
+  (if old-comment
+      (oset new-comment new (oref old-comment new))
+    (oset new-comment new t)))
+
+(defmethod gh-viewer-merge ((base gh-viewer-issue-comment-connection) old)
+  (let ((old-comments (oref old nodes))
+        (new-comments (oref base nodes)))
+    (cl-loop for new-comment in new-comments
+             do (let ((old-comment (cl-find-if #'(lambda (e) (gh-viewer-equal-p new-comment e))
+                                               old-comments)))
+                  (gh-viewer-merge new-comment old-comment)))
+
+    (mapc #'(lambda (e) (cl-pushnew e new-comments :test #'gh-viewer-equal-p))
+          old-comments)
+
+    (if (or (oref old has-new-comments) (cl-find-if #'(lambda (e) (oref e new)) new-comments))
+        (oset base has-new-comments t))))
+
+(defmethod gh-viewer-merge ((pr gh-viewer-pull-request) old)
+  (if old
+      (progn
+        (oset pr new (oref old new))
+        (gh-viewer-merge (oref pr comments) (oref old comments)))
+    (oset pr new t)))
+
 (defmethod gh-viewer-merge ((base ggc:pull-request-connection) other)
   (oset base page-info (oref other page-info))
-  (mapc #'(lambda (pr) (cl-pushnew pr (oref base nodes) :test #'equal))
-        (oref other nodes))
-  (oset base nodes
-        (cl-remove-if #'(lambda (pr)
-                          (cl-find-if #'(lambda (new-pr) (eq (oref new-pr number)
-                                                             (oref pr number)))
-                                      (oref other nodes)))
-                      (oref base nodes)))
-  (oset base nodes (cl-sort (append (oref base nodes) (oref other nodes))
-                            #'> :key #'(lambda (pr) (oref pr number))))
+  (let ((old-pull-requests (oref base nodes))
+        (new-pull-requests (oref other nodes)))
+    (if (< (length old-pull-requests) 1)
+        (oset base nodes new-pull-requests)
+      (cl-loop for pr in new-pull-requests
+               do (let ((old (cl-find-if #'(lambda (e) (gh-viewer-equal-p pr e)) old-pull-requests)))
+                    (gh-viewer-merge pr old)))
+
+      (mapc #'(lambda (pr) (cl-pushnew pr new-pull-requests :test #'gh-viewer-equal-p))
+            old-pull-requests)
+
+      (oset base nodes (cl-sort new-pull-requests #'> :key #'(lambda (pr) (oref pr number))))))
   base)
 
 (defmethod gh-viewer-has-more ((conn ggc:pull-request-connection) direction)
