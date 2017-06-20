@@ -73,28 +73,21 @@
 
 (defmethod gh-viewer-repo-issues ((repo gh-viewer-repo) cb &optional invalidate-cache)
   (cl-labels
-      ((fetch-issues ()
-                     (async-start
-                      `(lambda ()
-                         ,(async-inject-variables "gh-viewer-load-path")
-                         (dolist (path gh-viewer-load-path)
-                           (add-to-list 'load-path path))
-                         (require 'gh)
-                         (gh-issues-issue-list
-                          (gh-issues-api :sync nil :cache nil)
-                          ,(oref repo user) ,(oref repo repo))
-                         )
-                      #'(lambda (response)
-                          (oset repo issues (oref response data))
-                          (oset repo issues-last-fetched (time-to-seconds))
-                          (funcall cb (oref repo issues)))))
+      ((callback (issues)
+                 (oset repo issues issues)
+                 (oset repo issues-last-fetched (time-to-seconds))
+                 (funcall cb issues))
        (cache-invalid-p ()
                         (or invalidate-cache
                             (< 120 (- (time-to-seconds) (oref repo issues-last-fetched))))))
     (if (cache-invalid-p)
         (progn
           (oset repo old-issues (oref repo issues))
-          (fetch-issues))
+          (gh-url-add-response-callback
+           (gh-issues-issue-list
+            (gh-issues-api :sync nil :cache nil)
+            (oref repo user) (oref repo repo))
+           #'callback))
       (funcall cb (oref repo issues)))))
 
 ;;;###autoload
