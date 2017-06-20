@@ -38,7 +38,7 @@
   :group 'gh-viewer)
 
 (defcustom gh-viewer-repository-query-location
-  (expand-file-name "./graphql/repository.graphql")
+  (concat user-emacs-directory "el-get/gh-viewer/graphql/repository.graphql")
   "Query for fetch repository."
   :group 'gh-viewer)
 
