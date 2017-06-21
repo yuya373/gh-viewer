@@ -93,18 +93,20 @@
 (defmethod gh-viewer-stringify ((time-string string))
   (format-time-string "%Y-%m-%d %H:%M:%S" (parse-iso8601-time-string time-string)))
 
-(defmethod gh-viewer-stringify ((comment ggc:issue-comment))
-  (with-slots (author published-at body) comment
-    (let ((header (format "%s%s"
-                          (propertize (gh-viewer-stringify author)
-                                      'face 'gh-viewer-issue-comment-header-login)
-                          (propertize (format "  %s"(gh-viewer-stringify published-at))
-                                      'face 'gh-viewer-issue-comment-header-datetime))))
-      (format "%s\n%s" header body))))
+(defmethod gh-viewer-stringify ((comment ggc:issue-comment) &optional ignore-header)
+  (if ignore-header
+      (oref comment body)
+    (with-slots (author published-at body) comment
+      (let ((header (format "%s%s"
+                            (propertize (gh-viewer-stringify author)
+                                        'face 'gh-viewer-issue-comment-header-login)
+                            (propertize (format "  %s"(gh-viewer-stringify published-at))
+                                        'face 'gh-viewer-issue-comment-header-datetime))))
+        (format "%s\n%s" header body)))))
 
-(defmethod gh-viewer-stringify ((conn ggc:issue-comment-connection))
+(defmethod gh-viewer-stringify ((conn ggc:issue-comment-connection) &optional ignore-comment-header)
   (with-slots (nodes) conn
-    (mapconcat #'gh-viewer-stringify nodes "\n\n")))
+    (mapconcat #'(lambda (e) (gh-viewer-stringify e ignore-comment-header)) nodes "\n\n")))
 
 (defmethod gh-viewer-stringify ((rr ggc:review-request))
   (format "requested a review from %s" (gh-viewer-stringify (oref rr reviewer))))
@@ -144,14 +146,14 @@
                          (propertize (format " %s"
                                              (gh-viewer-format-time-string (oref review published-at)))
                                      'face 'gh-viewer-issue-comment-header-datetime)))
-         (comments (gh-viewer-stringify (oref review comments)))
+         (comments (gh-viewer-stringify (oref review comments) t))
          (body (let ((str (oref review body)))
                  (or (and (gh-viewer-blank? str) "")
                      (format "%s\n" str)))))
     (format "%s\n%s%s" header body comments)))
 
 (defmethod gh-viewer-stringify ((conn ggc:pull-request-review-connection))
-  (mapconcat #'gh-viewer-stringify (oref conn nodes) "\n"))
+  (mapconcat #'gh-viewer-stringify (oref conn nodes) "\n\n"))
 
 (defmethod gh-viewer-format-section-title ((title string))
   (propertize title 'face 'gh-viewer-pull-request-section-title))
