@@ -34,6 +34,7 @@
 (require 'gh-viewer-finder)
 (require 'gh-viewer-filter)
 (require 'gh-viewer-buffer)
+(require 'gh-viewer-fetcher)
 
 (defcustom gh-viewer-completing-read-alist
   (list

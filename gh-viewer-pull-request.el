@@ -23,6 +23,7 @@
 ;;
 
 ;;; Code:
+(require 'eieio)
 (require 'gh)
 (require 'gh-viewer-repo)
 (require 'gh-viewer-issue)
@@ -94,12 +95,12 @@
                                        (gh-viewer-filter-pull-request
                                         (oref repository pull-requests)
                                         filter))))
-                    (gh-viewer-buffer-display pull-request repository))
-                  ;; (gh-viewer-buffer-display (gh-viewer-filter-pull-request
-                  ;;                            (oref repository pull-requests)
-                  ;;                            filter)
-                  ;;                           repository)
-                  ))
+                    (if (gh-viewer-has-more (oref pull-request comments) "ASC")
+                        (progn
+                          (message "Loading Comments...")
+                          (gh-viewer-fetch (oref pull-request comments) pull-request repository
+                                           #'(lambda () (gh-viewer-buffer-display pull-request repository))))
+                      (gh-viewer-buffer-display pull-request repository)))))
       (if (gh-viewer-use-cache-p repo)
          (display (oref repo repository))
         (gh-viewer-fetch repo #'display)))))

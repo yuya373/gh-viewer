@@ -1,0 +1,46 @@
+query pullRequestsComment(
+  $owner: String!,
+  $name: String!,
+  $pullRequestNumber: Int!,
+  $commentsAfter: String
+) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $pullRequestNumber) {
+      comments(first: 100, after: $commentsAfter) {
+        nodes {
+          id
+          ...comment
+        }
+        pageInfo {
+          ...pageInfo
+        }
+        totalCount
+      }
+    }
+  }
+}
+
+fragment pageInfo on PageInfo {
+  startCursor
+  endCursor
+  hasNextPage
+  hasPreviousPage
+}
+
+fragment comment on Comment {
+  body
+  author {
+    ...actor
+  }
+  publishedAt
+  editor {
+    ...actor
+  }
+  lastEditedAt
+}
+
+fragment actor on Actor {
+  avatarUrl
+  login
+  url
+}

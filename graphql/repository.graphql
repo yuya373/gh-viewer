@@ -9,8 +9,7 @@ query repository(
   $reviewsAfter: String,
   $reviewCommentsAfter: String,
   $assigneesAfter: String,
-  $labelsAfter: String,
-  $commentsAfter: String
+  $labelsAfter: String
 ) {
   repository(owner: $owner, name: $name) {
     id
@@ -45,7 +44,7 @@ query repository(
             ...pageInfo
           }
         }
-        comments(first: 20, after: $commentsAfter) {
+        comments(first: 20) {
           nodes {
             id
             ...comment
@@ -75,6 +74,10 @@ query repository(
                 # reactionGroups {
                 # }
               }
+              pageInfo {
+                ...pageInfo
+              }
+              totalCount
             }
             ...comment
             state
