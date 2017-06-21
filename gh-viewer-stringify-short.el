@@ -27,21 +27,41 @@
 (require 'github-graphql-client)
 (require 'gh-viewer-graphql)
 
+(defmethod gh-viewer-stringify-short ((conn ggc:pull-request-review-connection))
+  (with-slots (nodes) conn
+    (cl-remove-duplicates (cl-remove-if #'null (mapcar #'(lambda (e) (oref e state)) nodes))
+                          :test #'string=)))
+
+(defun gh-viewer-review-status-face (state)
+  (cond
+   ((cl-typep state 'ggc:changes-requested) 'error)
+   ((cl-typep state 'ggc:commented) 'warning)
+   ((cl-typep state 'ggc:approved) 'success)))
+
 (defmethod gh-viewer-stringify-short ((pr ggc:pull-request))
   (with-slots (number state title comments) pr
     (let ((comments-count (format "%2d" (oref comments total-count)))
           (author (format "by %s" (gh-viewer-stringify (oref pr author))))
           (new (if (oref pr new)
                    (propertize "*" 'face 'error)
-                 " ")))
-      (format "%s #%s [%s] [%s] %s %s"
+                 " "))
+          (review-states (gh-viewer-stringify-short (oref pr reviews))))
+      (format "%s #%s [%s] [%s] %s %s%s"
               new
               (format "%4d" number)
               state
               (if (oref (oref pr comments) has-new-comments)
                   (propertize comments-count 'face 'error)
                 comments-count)
-              (propertize title 'face 'bold) author))))
+              (propertize title 'face 'bold)
+              author
+              (if (< 0 (length review-states))
+                  (format " [%s]" (mapconcat #'identity
+                                             (mapcar #'(lambda (e) (propertize e
+                                                                               'face (gh-viewer-review-status-face e)))
+                                                     review-states)
+                                             ", "))
+                "")))))
 
 (defmethod gh-viewer-stringify-short ((repo ggc:repository))
   (oref repo name-with-owner))
