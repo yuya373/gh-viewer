@@ -50,6 +50,10 @@
   (with-slots ((s state)) pr
     (string= s state)))
 
+(defmethod gh-viewer-filter-review-requested-p ((pr ggc:pull-request) reviewer)
+  (with-slots (nodes) (oref pr review-requests)
+    (cl-find-if #'(lambda (req) (string= reviewer (oref (oref req reviewer) login)))
+                nodes)))
 
 
 (provide 'gh-viewer-filter)
