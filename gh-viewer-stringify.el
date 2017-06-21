@@ -143,11 +143,15 @@
                                              'gh-viewer-review-state-changes-requested)))
                          (propertize (format " %s"
                                              (gh-viewer-format-time-string (oref review published-at)))
-                                     'face 'gh-viewer-issue-comment-header-datetime))))
-    (format "%s\n%s" header (oref review body))))
+                                     'face 'gh-viewer-issue-comment-header-datetime)))
+         (comments (gh-viewer-stringify (oref review comments)))
+         (body (let ((str (oref review body)))
+                 (or (and (gh-viewer-blank? str) "")
+                     (format "%s\n" str)))))
+    (format "%s\n%s%s" header body comments)))
 
 (defmethod gh-viewer-stringify ((conn ggc:pull-request-review-connection))
-  (mapconcat #'gh-viewer-stringify (oref conn nodes) "\n\n"))
+  (mapconcat #'gh-viewer-stringify (oref conn nodes) "\n"))
 
 (defmethod gh-viewer-format-section-title ((title string))
   (propertize title 'face 'gh-viewer-pull-request-section-title))
@@ -203,16 +207,25 @@
                    (oref pr head-ref-name)))
           (review-requests (let ((str (gh-viewer-stringify (oref pr review-requests))))
                              (or (and (gh-viewer-blank? str) "")
-                                 (format "%s\n%s" (gh-viewer-format-section-title "Review Requests:")
+                                 (format "%s %s\n" (gh-viewer-format-section-title "Review Requests:")
                                          str))))
           (reviews (let ((str (gh-viewer-stringify (oref pr reviews))))
                      (or (and (gh-viewer-blank? str) "")
                          (format "%s\n%s" (gh-viewer-format-section-title "Reviews:")
                                  str))))
           (body (format "%s\n\n" (oref pr body)))
+          (separator (mapconcat #'identity
+                                (cl-loop for i from 1 to 80
+                                         collect "-")
+                                ""))
           )
-      (format "%s%s%s%s%s\n%s%s%s%s"
-              title info labels assignees review-requests labels body comments reviews))))
+      (format "%s%s%s%s%s"
+              (format "%s%s%s%s%s" title info assignees labels review-requests)
+              (format "\n%s\n\n" separator)
+              body
+              (format "%s\n\n" separator)
+              (format "%s%s" comments reviews)
+              ))))
 
 (defmethod gh-viewer-stringify ((conn ggc:pull-request-connection) repo)
   (with-slots (nodes) conn
