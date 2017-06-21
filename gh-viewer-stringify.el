@@ -233,7 +233,8 @@
   (with-slots (nodes) conn
     (mapconcat #'(lambda (e) (gh-viewer-stringify e repo)) nodes "\n")))
 
-
+(defmethod gh-viewer-stringify ((repo gh-viewer-repo))
+  (format "%s/%s" (oref repo owner) (oref repo name)))
 
 (provide 'gh-viewer-stringify)
 ;;; gh-viewer-stringify.el ends here

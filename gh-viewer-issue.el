@@ -115,7 +115,7 @@
 
 (defmethod gh-viewer-issue-comment-buffer-name ((issue gh-issues-issue) repo)
   (format "*Gh-Viewer: %s Issue: %s - Comments*"
-          (gh-viewer-repo-to-string repo)
+          (gh-viewer-stringify repo)
           (oref issue title)))
 
 (defmethod gh-viewer-issue-comment-to-string ((comment gh-comment))

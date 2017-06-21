@@ -61,7 +61,7 @@
   (format "%s/%s" (oref repo owner) (oref repo name)))
 
 (defun gh-viewer-repo-select ()
-  (let* ((alist (mapcar #'(lambda (e) (cons (gh-viewer-repo-to-string e) e))
+  (let* ((alist (mapcar #'(lambda (e) (cons (gh-viewer-stringify e) e))
                         gh-viewer-repos))
          (input (completing-read "Select Repo: " alist))
          (selected (cdr (cl-assoc input alist :test #'string=))))
@@ -104,7 +104,7 @@
                            (when (timerp timer)
                              (cancel-timer timer)
                              (setq timer nil)
-                             (message "Stopped timer: %s" (gh-viewer-repo-to-string repo)))))
+                             (message "Stopped timer: %s" (gh-viewer-stringify repo)))))
         gh-viewer-repos))
 
 (defun gh-viewer-repo-default-notifier (repo issues)
@@ -124,7 +124,7 @@
                           (run-at-time t gh-viewer-repo-watch-idle-time
                                        #'(lambda () (gh-viewer-fetch repo))))))
       (gh-viewer-fetch repo #'set-timer)
-      (message "Started timer: %s" (gh-viewer-repo-to-string repo)))))
+      (message "Started timer: %s" (gh-viewer-stringify repo)))))
 
 (defmethod gh-viewer-repo-notify-new-pull-request-p ((repo gh-viewer-repo))
   (oref repo notify-new-pull-request))
