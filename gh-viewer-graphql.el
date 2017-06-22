@@ -272,5 +272,11 @@
     (oset base page-info (oref new page-info)))
   base)
 
+(defmethod gh-viewer-remove-unread ((pr gh-viewer-pull-request))
+  (oset pr new nil))
+
+(defmethod gh-viewer-remove-unread ((conn gh-viewer-issue-comment-connection))
+  (oset conn has-new-comments nil))
+
 (provide 'gh-viewer-graphql)
 ;;; gh-viewer-graphql.el ends here

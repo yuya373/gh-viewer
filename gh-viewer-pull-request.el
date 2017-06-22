@@ -89,7 +89,11 @@
          (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
          (filter (cdr (assoc query-name gh-viewer-issue-queries))))
     (cl-labels
-        ((display (repository)
+        ((open (pull-request repository)
+               (gh-viewer-buffer-display pull-request repository)
+               (gh-viewer-remove-unread pull-request)
+               (gh-viewer-remove-unread (oref pull-request comments)))
+         (display (repository)
 
                   (let ((pull-request (gh-viewer-select
                                        (gh-viewer-filter-pull-request
@@ -99,8 +103,8 @@
                         (progn
                           (message "Loading Comments...")
                           (gh-viewer-fetch (oref pull-request comments) pull-request repository
-                                           #'(lambda () (gh-viewer-buffer-display pull-request repository))))
-                      (gh-viewer-buffer-display pull-request repository)))))
+                                           #'(lambda () (open pull-request repository))))
+                      (open pull-request repository)))))
       (if (gh-viewer-use-cache-p repo)
          (display (oref repo repository))
         (gh-viewer-fetch repo #'display)))))
