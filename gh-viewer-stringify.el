@@ -66,6 +66,14 @@
   "Face used to RET key aware text"
   :group 'gh-viewer)
 
+(defcustom gh-viewer-transform-reactions
+  (list (cons "HOORAY" "tada")
+        (cons "THUMBS_UP" "+1")
+        (cons "THUMBS_DOWN" "-1")
+        (cons "LAUGH" "smile"))
+  "Reactions have to transform correct emoji."
+  :group 'gh-viewer)
+
 (defmethod gh-viewer-blank? ((str string))
   (not (< 0 (length str))))
 
@@ -222,14 +230,13 @@
                                 ""))
           (reactions (let ((str (gh-viewer-stringify (oref pr reactions))))
                        (or (and (gh-viewer-blank? str) "")
-                           (format "%s %s\n"
-                                   (gh-viewer-format-section-title "Reactions:")
-                                   str)))))
-      (format "%s%s%s%s%s"
-              (format "%s%s%s%s%s%s" title info reactions assignees labels review-requests)
+                           (format "%s\n" str)))))
+      (format "%s%s%s%s%s%s"
+              (format "%s%s%s%s%s" title info assignees labels review-requests)
               (format "\n%s\n\n" separator)
               body
-              (format "%s\n\n" separator)
+              (format "%s\n" separator)
+              (format "%s\n" reactions)
               (format "%s%s" comments reviews)
               ))))
 
@@ -247,11 +254,16 @@
     (with-slots (nodes) conn
       (let ((grouped (group-by nodes))
             (ret nil))
-        (maphash #'(lambda (key value)
-                     (push (format ":%s: %s" (downcase key) (length value))
-                           ret))
-                 grouped)
-        (mapconcat #'identity ret ", ")))))
+        (maphash
+         #'(lambda (key value)
+             (push (format ":%s::%s"
+                           (let ((fixed (cdr (cl-assoc key gh-viewer-transform-reactions
+                                                       :test #'string=))))
+                             (downcase (or fixed key)))
+                           (length value))
+                   ret))
+         grouped)
+        (mapconcat #'identity ret " ")))))
 
 (defmethod gh-viewer-stringify ((conn ggc:pull-request-connection) repo)
   (with-slots (nodes) conn
