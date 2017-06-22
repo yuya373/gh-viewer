@@ -43,6 +43,12 @@
   "Query for fetch pull-request-comments."
   :group 'gh-viewer)
 
+(defvar gh-viewer-before-merge-hook nil
+  "Hook runs before Repository merged.\n`(lambda (new-repository old-repository) ...)'.")
+
+(defmethod gh-viewer-notifier ((new-repository ggc:repository) old-repository)
+  (alert "Hook runs!!!" :title (gh-viewer-stringify-short new-repository)))
+
 (defun gh-viewer-query (location)
   (let ((path location))
     (with-temp-buffer
@@ -105,6 +111,7 @@
   (cl-labels
       ((on-success (new-repository)
                    (if (oref repo repository)
+                       (run-hook-with-args 'gh-viewer-before-merge-hook new-repository (oref repo repository))
                        (gh-viewer-merge (oref repo repository) new-repository)
                      (oset repo repository new-repository))
 
