@@ -233,7 +233,7 @@
 (defmethod gh-viewer-merge ((base ggc:repository) new &optional ignore-new-flag)
   (oset base name (oref new name))
   (oset base owner (oref new owner))
-  (oset base name-with-owner (oref new name))
+  (oset base name-with-owner (oref new name-with-owner))
   (oset base pull-requests (gh-viewer-merge
                             (oref base pull-requests)
                             (oref new pull-requests)
