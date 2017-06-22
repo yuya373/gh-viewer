@@ -45,13 +45,7 @@
 ;;;###autoload
 (defun gh-viewer-pull-request (&optional invalidate-cache)
   (interactive)
-  (let* ((repo (gh-viewer-repo-select)))
-    (cl-labels
-        ((display (issues)
-                  (gh-viewer-pull-request-render
-                   repo
-                   (gh-viewer-pull-request-remove-issues issues))))
-      (gh-viewer-repo-issues repo #'display invalidate-cache))))
+  (gh-viewer-pull-request-filtered #'identity))
 
 (defun gh-viewer-pull-request-render (repo pulls)
   (if (eq 0 (length pulls))
@@ -83,31 +77,35 @@
      (gh-viewer-issue--filter-by-assignee pulls assignee))))
 
 ;;;###autoload
-(defun gh-viewer-pull-request-filtered ()
+(defun gh-viewer-pull-request-filtered (&optional query)
   (interactive)
-  (let* ((repo (gh-viewer-repo-select))
-         (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
-         (filter (cdr (assoc query-name gh-viewer-issue-queries))))
-    (cl-labels
-        ((open (pull-request repository)
-               (gh-viewer-buffer-display pull-request repository)
-               (gh-viewer-remove-unread pull-request)
-               (gh-viewer-remove-unread (oref pull-request comments)))
-         (display (repository)
+  (cl-labels
+      ((select-query ()
+                  (cdr (assoc
+                        (completing-read "Select Filter: " gh-viewer-issue-queries)
+                        gh-viewer-issue-queries))))
+    (let* ((repo (gh-viewer-repo-select))
+           (filter (or query (select-query))))
+      (cl-labels
+          ((open (pull-request repository)
+                 (gh-viewer-buffer-display pull-request repository)
+                 (gh-viewer-remove-unread pull-request)
+                 (gh-viewer-remove-unread (oref pull-request comments)))
+           (display (repository)
 
-                  (let ((pull-request (gh-viewer-select
-                                       (gh-viewer-filter-pull-request
-                                        (oref repository pull-requests)
-                                        filter))))
-                    (if (gh-viewer-has-more (oref pull-request comments) "ASC")
-                        (progn
-                          (message "Loading Comments...")
-                          (gh-viewer-fetch (oref pull-request comments) pull-request repository
-                                           #'(lambda () (open pull-request repository))))
-                      (open pull-request repository)))))
-      (if (gh-viewer-use-cache-p repo)
-         (display (oref repo repository))
-        (gh-viewer-fetch repo #'display)))))
+                    (let ((pull-request (gh-viewer-select
+                                         (gh-viewer-filter-pull-request
+                                          (oref repository pull-requests)
+                                          filter))))
+                      (if (gh-viewer-has-more (oref pull-request comments) "ASC")
+                          (progn
+                            (message "Loading Comments...")
+                            (gh-viewer-fetch (oref pull-request comments) pull-request repository
+                                             #'(lambda () (open pull-request repository))))
+                        (open pull-request repository)))))
+        (if (gh-viewer-use-cache-p repo)
+            (display (oref repo repository))
+          (gh-viewer-fetch repo #'display))))))
 
 (provide 'gh-viewer-pull-request)
 ;;; gh-viewer-pull-request.el ends here
