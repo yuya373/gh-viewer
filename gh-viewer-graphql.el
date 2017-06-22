@@ -270,10 +270,7 @@
 
 (defmethod gh-viewer-merge ((base ggc:pull-request-connection) new &optional ignore-new-flag)
   (let ((old-pull-requests (oref base nodes))
-        (new-pull-requests (oref new nodes))
-        (old-count (oref base total-count))
-        (new-count (oref new total-count)))
-
+        (new-pull-requests (oref new nodes)))
     (if (< (length old-pull-requests) 1)
         (oset base nodes new-pull-requests)
 
