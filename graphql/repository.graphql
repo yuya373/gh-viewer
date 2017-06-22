@@ -82,6 +82,19 @@ query repository(
             ...pageInfo
           }
         }
+        reactions(first: 20) {
+          nodes {
+            id
+            content
+            user {
+              ...actor
+            }
+          }
+          pageInfo {
+            ...pageInfo
+          }
+          totalCount
+        }
         id
         number
         title

@@ -220,14 +220,38 @@
                                 (cl-loop for i from 1 to 80
                                          collect "-")
                                 ""))
-          )
+          (reactions (let ((str (gh-viewer-stringify (oref pr reactions))))
+                       (or (and (gh-viewer-blank? str) "")
+                           (format "%s %s\n"
+                                   (gh-viewer-format-section-title "Reactions:")
+                                   str)))))
       (format "%s%s%s%s%s"
-              (format "%s%s%s%s%s" title info assignees labels review-requests)
+              (format "%s%s%s%s%s%s" title info reactions assignees labels review-requests)
               (format "\n%s\n\n" separator)
               body
               (format "%s\n\n" separator)
               (format "%s%s" comments reviews)
               ))))
+
+(defmethod gh-viewer-stringify ((conn ggc:reaction-connection))
+  (cl-labels
+      ((group-by (reactions)
+                 (let ((ret (make-hash-table :test 'equal)))
+                   (cl-loop for e in reactions
+                            do (let* ((content (oref e content))
+                                      (existings (gethash content ret)))
+                                 (if existings
+                                     (puthash content (cons e existings) ret)
+                                   (puthash content (list e) ret))))
+                   ret)))
+    (with-slots (nodes) conn
+      (let ((grouped (group-by nodes))
+            (ret nil))
+        (maphash #'(lambda (key value)
+                     (push (format ":%s: %s" (downcase key) (length value))
+                           ret))
+                 grouped)
+        (mapconcat #'identity ret ", ")))))
 
 (defmethod gh-viewer-stringify ((conn ggc:pull-request-connection) repo)
   (with-slots (nodes) conn

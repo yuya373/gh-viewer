@@ -56,8 +56,7 @@
      (emojify-mode t)
      ,@body
      (setq buffer-read-only t)
-     (goto-char (point-min))
-     ))
+     (goto-char (point-min))))
 
 (defmethod gh-viewer-buffer-display ((pr ggc:pull-request) repo)
   (let ((buf (get-buffer-create (gh-viewer-buffer-name pr repo))))

@@ -141,6 +141,18 @@
                                            #'gh-viewer-graphql-initialize-pull-request-review
                                            'ggc:pull-request-review-connection))
 
+(defun gh-viewer-graphql-initialize-reaction (reaction)
+  (make-instance 'ggc:reaction
+                 :user (gh-viewer-graphql-initialize-user (plist-get reaction :user))
+                 :content (plist-get reaction :content)
+                 :created-at (plist-get reaction :createdAt)))
+
+(defun gh-viewer-graphql-initialize-reactions-connection (reactions)
+  (gh-viewer-graphql-initialize-connection
+   reactions
+   #'gh-viewer-graphql-initialize-reaction
+   'ggc:reaction-connection))
+
 (defun gh-viewer-graphql-initialize-pull-request (pull-request)
   (let ((assignees (gh-viewer-graphql-initialize-user-connection
                     (plist-get pull-request :assignees)))
@@ -154,13 +166,17 @@
           (plist-get pull-request :reviewRequests)))
         (reviews
          (gh-viewer-graphql-initialize-pull-request-review-connection
-          (plist-get pull-request :reviews))))
+          (plist-get pull-request :reviews)))
+        (reactions
+         (gh-viewer-graphql-initialize-reactions-connection
+          (plist-get pull-request :reactions))))
     (make-instance 'gh-viewer-pull-request
                    :assignees assignees
                    :labels labels
                    :comments comments
                    :review-requests review-requests
                    :reviews reviews
+                   :reactions reactions
                    :id (plist-get pull-request :id)
                    :number (plist-get pull-request :number)
                    :title (gh-viewer-decode (plist-get pull-request :title))
