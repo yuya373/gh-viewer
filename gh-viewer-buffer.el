@@ -25,6 +25,7 @@
 ;;; Code:
 
 (require 'eieio)
+(require 'emojify)
 (require 'github-graphql-client)
 (require 'gh-viewer-stringify-short)
 
@@ -44,41 +45,38 @@
 
 (defun gh-viewer-setup-buffer (buf)
   (with-current-buffer buf
-    (setq buffer-read-only nil)
-    (erase-buffer)
-    (goto-char (point-min))))
+    ))
+
+(defmacro gh-viewer-with-buffer (buf &rest body)
+  (declare (indent 2) (debug t))
+  `(with-current-buffer ,buf
+     (setq buffer-read-only nil)
+     (erase-buffer)
+     (goto-char (point-min))
+     (emojify-mode t)
+     ,@body
+     (setq buffer-read-only t)
+     (goto-char (point-min))
+     ))
 
 (defmethod gh-viewer-buffer-display ((pr ggc:pull-request) repo)
   (let ((buf (get-buffer-create (gh-viewer-buffer-name pr repo))))
-    (with-current-buffer buf
-      (setq buffer-read-only nil)
-      (erase-buffer)
-      (goto-char (point-min))
-      (insert (gh-viewer-stringify pr repo))
-      (setq buffer-read-only t)
-      (goto-char (point-min)))
+    (gh-viewer-with-buffer buf
+        (insert (gh-viewer-stringify pr repo)))
     (display-buffer buf)))
 
 (defmethod gh-viewer-buffer-display ((conn ggc:issue-comment-connection) pr repo)
   (let ((buf (get-buffer-create (gh-viewer-buffer-name conn pr repo))))
-    (with-current-buffer buf
-      (setq buffer-read-only nil)
-      (erase-buffer)
-      (goto-char (point-min))
-      (insert (gh-viewer-stringify conn))
-      (setq buffer-read-only t)
-      (goto-char (point-min)))
+    (gh-viewer-with-buffer buf
+      (insert (gh-viewer-stringify conn)))
     (display-buffer buf)))
 
 (defmethod gh-viewer-buffer-display ((conn ggc:pull-request-connection) repo)
   (if (not (< 0 (length (oref conn nodes))))
       (message "No Pull Request in %s" (oref repo name-with-owner))
     (let ((buf (get-buffer-create (gh-viewer-buffer-name conn repo))))
-      (gh-viewer-setup-buffer buf)
-      (with-current-buffer buf
-        (insert (gh-viewer-stringify conn repo))
-        (setq buffer-read-only t)
-        (goto-char (point-min)))
+      (gh-viewer-buffer buf
+        (insert (gh-viewer-stringify conn repo)))
       (display-buffer buf))))
 
 (provide 'gh-viewer-buffer)
