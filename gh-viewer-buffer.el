@@ -30,22 +30,18 @@
 (require 'gh-viewer-stringify-short)
 
 (defmethod gh-viewer-buffer-name ((pr ggc:pull-request) repo)
-  (format " * %s - %s *"
+  (format "* %s - %s *"
           (gh-viewer-stringify-short repo)
           (gh-viewer-stringify-short pr)))
 
 (defmethod gh-viewer-buffer-name ((_conn ggc:pull-request-connection) repo)
-  (format " * %s - Pull Requests *"
+  (format "* %s - Pull Requests *"
           (gh-viewer-stringify-short repo)))
 
 (defmethod gh-viewer-buffer-name ((_conn ggc:issue-comment-connection) pr repo)
-  (format " * %s - %s - Comments *"
+  (format "* %s - %s - Comments *"
           (gh-viewer-stringify-short repo)
           (gh-viewer-stringify-short pr)))
-
-(defun gh-viewer-setup-buffer (buf)
-  (with-current-buffer buf
-    ))
 
 (defmacro gh-viewer-with-buffer (buf &rest body)
   (declare (indent 2) (debug t))
