@@ -8,8 +8,7 @@ query pullRequestsComment(
     pullRequest(number: $pullRequestNumber) {
       comments(first: 100, after: $commentsAfter) {
         nodes {
-          id
-          ...comment
+          ...issueComment
         }
         pageInfo {
           ...pageInfo
@@ -43,4 +42,10 @@ fragment actor on Actor {
   avatarUrl
   login
   url
+}
+
+fragment issueComment on IssueComment {
+  id
+  ...comment
+  bodyText
 }

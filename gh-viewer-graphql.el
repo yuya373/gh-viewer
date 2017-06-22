@@ -43,6 +43,10 @@
 
 (defvar gh-viewer-graphql-repositories nil)
 
+(defun gh-viewer-decode (text)
+  (when text
+    (decode-coding-string text 'utf-8)))
+
 (defun gh-viewer-graphql-handle-json-boolean (json-boolean)
   (if (eq :json-false json-boolean)
       nil
@@ -67,7 +71,7 @@
 
 (defun gh-viewer-graphql-comment-props (comment)
   (list
-   :body (decode-coding-string (plist-get comment :body) 'utf-8)
+   :body (gh-viewer-decode (plist-get comment :body))
    :author (gh-viewer-graphql-initialize-actor (plist-get comment :author))
    :published-at (plist-get comment :publishedAt)
    :editor (gh-viewer-graphql-initialize-actor (plist-get comment :editor))
@@ -101,9 +105,12 @@
                                            'ggc:label-connection))
 
 (defun gh-viewer-graphql-initialize-issue-comment (comment)
-  (apply #'make-instance 'gh-viewer-issue-comment
-         :id (plist-get comment :id)
-         (gh-viewer-graphql-comment-props comment)))
+  (let ((body-text (gh-viewer-decode (plist-get comment :bodyText)))
+        (comment-props (gh-viewer-graphql-comment-props comment)))
+    (apply #'make-instance 'gh-viewer-issue-comment
+           :id (plist-get comment :id)
+           (if body-text (append (list :body-text body-text) comment-props)
+             comment-props))))
 
 (defun gh-viewer-graphql-initialize-issue-comment-connection (comments)
   (gh-viewer-graphql-initialize-connection comments
@@ -156,13 +163,10 @@
                    :reviews reviews
                    :id (plist-get pull-request :id)
                    :number (plist-get pull-request :number)
-                   :title (decode-coding-string
-                           (plist-get pull-request :title)
-                           'utf-8)
+                   :title (gh-viewer-decode (plist-get pull-request :title))
                    :author (gh-viewer-graphql-initialize-actor (plist-get pull-request :author))
-                   :body (decode-coding-string
-                          (plist-get pull-request :body)
-                          'utf-8)
+                   :body (gh-viewer-decode (plist-get pull-request :body))
+                   :body-text (gh-viewer-decode (plist-get pull-request :bodyText))
                    :head-ref-name (plist-get pull-request :headRefName)
                    :base-ref-name (plist-get pull-request :baseRefName)
                    :merged (gh-viewer-graphql-handle-json-boolean (plist-get pull-request :merged))

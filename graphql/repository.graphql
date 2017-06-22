@@ -46,8 +46,7 @@ query repository(
         }
         comments(first: 20) {
           nodes {
-            id
-            ...comment
+            ...issueComment
           }
           pageInfo {
             ...pageInfo
@@ -69,10 +68,7 @@ query repository(
           nodes {
             comments(first: 20, after: $reviewCommentsAfter) {
               nodes {
-                id
-                ...comment
-                # reactionGroups {
-                # }
+                ...pullRequestReviewComment
               }
               pageInfo {
                 ...pageInfo
@@ -99,6 +95,7 @@ query repository(
         url
         publishedAt
         ...comment
+        bodyText
       }
       pageInfo {
         ...pageInfo
@@ -131,4 +128,16 @@ fragment actor on Actor {
   avatarUrl
   login
   url
+}
+
+fragment issueComment on IssueComment {
+  id
+  ...comment
+  bodyText
+}
+
+fragment pullRequestReviewComment on PullRequestReviewComment {
+  id
+  ...comment
+  bodyText
 }
