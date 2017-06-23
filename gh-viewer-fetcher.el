@@ -144,8 +144,9 @@
   (cl-labels
       ((on-success (new-repository)
                    (if (oref repo repository)
-                       (run-hook-with-args 'gh-viewer-before-merge-hook new-repository (oref repo repository))
-                       (gh-viewer-merge (oref repo repository) new-repository)
+                       (progn
+                         (run-hook-with-args 'gh-viewer-before-merge-hook new-repository (oref repo repository))
+                         (gh-viewer-merge (oref repo repository) new-repository))
                      (oset repo repository new-repository))
 
                    (oset repo last-fetched (time-to-seconds))
