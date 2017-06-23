@@ -46,8 +46,41 @@
 (defvar gh-viewer-before-merge-hook nil
   "Hook runs before Repository merged.\n`(lambda (new-repository old-repository) ...)'.")
 
+(defmethod gh-viewer-notifier ((new ggc:pull-request) old repo)
+  (when old
+    (let* ((new-comment-count (oref (oref new comments) total-count))
+           (old-comment-count (oref (oref old comments) total-count))
+           (comment-count-diff (- new-comment-count old-comment-count)))
+      (if (< 0 comment-count-diff)
+          (alert (format "#%s has %s new Comment%s"
+                         (oref new number)
+                         comment-count-diff
+                         (or (and (< 1 comment-count-diff) "s")
+                             ""))
+                 :title (gh-viewer-stringify-short repo))))))
+
+(defmethod gh-viewer-notifier ((new ggc:pull-request-connection) old repo)
+  (let* ((new-total-count (oref new total-count))
+         (old-total-count (oref old total-count))
+         (total-count-diff (- new-total-count old-total-count)))
+    (if (< 0 total-count-diff)
+        (alert (format "has %s new Pull Request%s"
+                       total-count-diff
+                       (or (and (< 1 total-count-diff) "s")
+                           ""))
+               :title (gh-viewer-stringify-short repo)))
+    (mapc #'(lambda (new-pr)
+              (gh-viewer-notifier new-pr
+                                  (cl-find-if #'(lambda (old-pr) (string= (oref old-pr id)
+                                                                          (oref new-pr id)))
+                                              (oref old nodes))
+                                  repo))
+          (oref new nodes))))
+
 (defmethod gh-viewer-notifier ((new-repository ggc:repository) old-repository)
-  (alert "Hook runs!!!" :title (gh-viewer-stringify-short new-repository)))
+  (let ((new-pull-requests (oref new-repository pull-requests))
+        (old-pull-requests (oref old-repository pull-requests)))
+    (gh-viewer-notifier new-pull-requests old-pull-requests new-repository)))
 
 (defun gh-viewer-query (location)
   (let ((path location))
