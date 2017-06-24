@@ -100,11 +100,11 @@
 
 (defun gh-viewer-repo-stop-watch ()
   (interactive)
-  (mapc #'(lambda (repo) (with-slots ((timer watch-timer)) repo
-                           (when (timerp timer)
-                             (cancel-timer timer)
-                             (setq timer nil)
-                             (message "Stopped timer: %s" (gh-viewer-stringify repo)))))
+  (mapc #'(lambda (repo)
+            (when (timerp (oref repo watch-timer))
+              (cancel-timer (oref repo watch-timer))
+              (oset repo watch-timer nil)
+              (message "Stopped timer: %s" (gh-viewer-stringify repo))))
         gh-viewer-repos))
 
 (defun gh-viewer-repo-default-notifier (repo issues)
@@ -116,15 +116,14 @@
         issues))
 
 (defmethod gh-viewer-repo-watch ((repo gh-viewer-repo))
-  (with-slots (watch-timer) repo
-    (when (timerp watch-timer) (cancel-timer watch-timer))
-    (cl-labels
-        ((set-timer (_)
-                    (setq watch-timer
-                          (run-at-time t gh-viewer-repo-watch-idle-time
-                                       #'(lambda () (gh-viewer-fetch repo))))))
-      (gh-viewer-fetch repo #'set-timer)
-      (message "Started timer: %s" (gh-viewer-stringify repo)))))
+  (when (timerp (oref repo watch-timer)) (cancel-timer (oref repo watch-timer)))
+  (cl-labels
+      ((set-timer (_)
+                  (oset repo watch-timer
+                        (run-at-time t gh-viewer-repo-watch-idle-time
+                                     #'(lambda () (gh-viewer-fetch repo))))))
+    (gh-viewer-fetch repo #'set-timer)
+    (message "Started timer: %s" (gh-viewer-stringify repo))))
 
 (defmethod gh-viewer-repo-notify-new-pull-request-p ((repo gh-viewer-repo))
   (oref repo notify-new-pull-request))
