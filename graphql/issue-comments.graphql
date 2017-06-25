@@ -1,11 +1,11 @@
-query pullRequestComments(
+query issueComments(
   $owner: String!,
   $name: String!,
-  $pullRequestNumber: Int!,
+  $issueNumber: Int!,
   $commentsAfter: String
 ) {
   repository(owner: $owner, name: $name) {
-    pullRequest(number: $pullRequestNumber) {
+    issue(number: $issueNumber) {
       comments(first: 100, after: $commentsAfter) {
         ...issueCommentConnection
       }

@@ -1,0 +1,40 @@
+fragment actor on Actor {
+  avatarUrl
+  login
+  url
+}
+
+fragment comment on Comment {
+  body
+  author {
+    ...actor
+  }
+  publishedAt
+  editor {
+    ...actor
+  }
+  lastEditedAt
+}
+
+fragment issueComment on IssueComment {
+  id
+  ...comment
+  bodyText
+}
+
+fragment pageInfo on PageInfo {
+  startCursor
+  endCursor
+  hasNextPage
+  hasPreviousPage
+}
+
+fragment issueCommentConnection on IssueCommentConnection {
+  nodes {
+    ...issueComment
+  }
+  pageInfo {
+    ...pageInfo
+  }
+  totalCount
+}

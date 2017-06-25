@@ -40,7 +40,22 @@
 
 (defcustom gh-viewer-pull-request-comments-query-location
   (concat user-emacs-directory "el-get/gh-viewer/graphql/pull-request-comments.graphql")
-  "Query for fetch pull-request-comments."
+  "Query for fetch Pull Request Comments."
+  :group 'gh-viewer)
+
+(defcustom gh-viewer-issue-comments-query-location
+  (concat user-emacs-directory "el-get/gh-viewer/graphql/issue-comments.graphql")
+  "Query for fetch Issue Comments."
+  :group 'gh-viewer)
+
+(defcustom gh-viewer-repository-fragments-location
+  (concat user-emacs-directory "el-get/gh-viewer/graphql/repository-fragments.graphql")
+  "Shared Query for graphql."
+  :group 'gh-viewer)
+
+(defcustom gh-viewer-issue-comment-connection-fragment-location
+  (concat user-emacs-directory "el-get/gh-viewer/graphql/issue-comment-connection-fragment.graphql")
+  "Fragment of IssueCommentConnection."
   :group 'gh-viewer)
 
 (defvar gh-viewer-before-merge-hook nil
@@ -83,11 +98,16 @@
     (gh-viewer-notifier new-pull-requests old-pull-requests new-repository)))
 
 (defun gh-viewer-query (location)
-  (let ((path location))
-    (with-temp-buffer
-      (set-buffer-multibyte t)
-      (insert-file-contents-literally path nil)
-      (buffer-substring-no-properties (point-min) (point-max)))))
+  (with-temp-buffer
+    (set-buffer-multibyte t)
+    (insert-file-contents-literally location nil)
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(defun gh-viewer-repository-query ()
+  (format "%s\n%s\n%s"
+          (gh-viewer-query gh-viewer-repository-query-location)
+          (gh-viewer-query gh-viewer-repository-fragments-location)
+          (gh-viewer-query gh-viewer-issue-comment-connection-fragment-location)))
 
 (cl-defun gh-viewer-fetch-repository (owner name &key
                                             (success nil)
@@ -95,16 +115,41 @@
                                             (http-error nil)
                                             (pull-request-states '("OPEN"))
                                             (pull-request-order-field "CREATED_AT")
-                                            (pull-request-order-direction "DESC"))
-  (let ((query (gh-viewer-query gh-viewer-repository-query-location))
+                                            (pull-request-order-direction "DESC")
+                                            (issue-states '("OPEN"))
+                                            (issue-order-field "CREATED_AT")
+                                            (issue-order-direction "DESC")
+                                            )
+  (let ((query (gh-viewer-repository-query))
         (token gh-viewer-token)
         (variables (list (cons "owner" owner)
                          (cons "name" name)
                          (cons "pullRequestStates" pull-request-states)
                          (cons "pullRequestOrderField" pull-request-order-field)
-                         (cons "pullRequestOrderDirection" pull-request-order-direction))))
+                         (cons "pullRequestOrderDirection" pull-request-order-direction)
+                         (cons "issueStates" issue-states)
+                         (cons "issueOrderField" issue-order-field)
+                         (cons "issueOrderDirection" issue-order-direction)
+                         )))
     (cl-labels
-        ((on-success (data base pull-request-before)
+        ((paginate-or-finish (repo)
+                             (let ((has-more-pull-requests (gh-viewer-has-more (oref repo pull-requests)
+                                                                               pull-request-order-direction))
+                                   (has-more-issues (gh-viewer-has-more (oref repo issues)
+                                                                        issue-order-direction)))
+                               (if (or has-more-pull-requests has-more-issues)
+                                   (fetch repo
+                                          (and has-more-pull-requests
+                                               (gh-viewer-next-cursor (oref repo pull-requests)
+                                                                      pull-request-order-direction))
+                                          (and has-more-issues
+                                               (gh-viewer-next-cursor (oref repo issues)
+                                                                      issue-order-direction))
+                                          (not has-more-pull-requests)
+                                          (not has-more-issues))
+                                 (when (functionp success)
+                                   (funcall success repo)))))
+         (on-success (data base)
                      (let* ((repo (gh-viewer-graphql-initialize-repository
                                    (plist-get (plist-get data :data) :repository))))
 
@@ -112,14 +157,7 @@
                          (gh-viewer-merge base repo t)
                          (setq repo base))
 
-                       (if (gh-viewer-has-more (oref repo pull-requests)
-                                               pull-request-order-direction)
-                           (fetch repo
-                                  (gh-viewer-next-cursor (oref repo pull-requests)
-                                                         pull-request-order-direction))
-                         (when (functionp success)
-                           (funcall success repo)))
-                       ))
+                       (paginate-or-finish repo)))
          (on-error (data)
                    (message (format "%s" (plist-get data :errors)))
                    (when (functionp error)
@@ -128,16 +166,19 @@
                         (message (format "%s" error-thrown))
                         (when (functionp http-error)
                           (funcall http-error error-thrown)))
-         (fetch (&optional base pull-request-before)
+         (fetch (&optional base pull-request-before issue-before ignore-pull-requests ignore-issues)
                 (github-graphql-client-request
                  query token
-                 :success #'(lambda (data) (on-success data base pull-request-before))
+                 :success #'(lambda (data) (on-success data base))
                  :error #'on-error
                  :http-error #'on-http-error
-                 :variables (if pull-request-before
-                                (cons (cons "pullRequestBefore" pull-request-before)
-                                      variables)
-                              variables))))
+                 :variables (cons (cons "pullRequestBefore" pull-request-before)
+                                  (cons (cons "issueBefore" issue-before)
+                                        (cons (cons "ignorePullRequests" (or ignore-pull-requests
+                                                                             :json-false))
+                                              (cons (cons "ignoreIssues" (or ignore-issues
+                                                                             :json-false))
+                                                    variables)))))))
       (fetch))))
 
 (cl-defmethod gh-viewer-fetch ((repo gh-viewer-repo) &optional success error)
@@ -151,42 +192,71 @@
 
                    (oset repo last-fetched (time-to-seconds))
                    (when (functionp success)
-                     (funcall success (oref repo repository)))
-                   (message "Fetched %s" (gh-viewer-stringify repo)))
+                     (funcall success (oref repo repository))))
        (on-error (errors) (message "Errors: %s" errors)))
     (message "Fetching %s ..." (gh-viewer-stringify repo))
     (gh-viewer-fetch-repository (oref repo owner) (oref repo name)
                                 :success #'on-success :error error)))
 
-(cl-defmethod gh-viewer-fetch ((conn ggc:issue-comment-connection) pull-request repository
+(defmethod gh-viewer-comments-query ((_pr ggc:pull-request))
+  (format "%s\n%s"
+          (gh-viewer-query gh-viewer-pull-request-comments-query-location)
+          (gh-viewer-query gh-viewer-issue-comment-connection-fragment-location)))
+
+(defmethod gh-viewer-comments-query ((_issue ggc:issue))
+  (format "%s\n%s"
+          (gh-viewer-query gh-viewer-issue-comments-query-location)
+          (gh-viewer-query gh-viewer-issue-comment-connection-fragment-location)))
+
+(defmethod gh-viewer-number-param ((pr ggc:pull-request))
+  (cons "pullRequestNumber" (oref pr number)))
+
+(defmethod gh-viewer-number-param ((issue ggc:issue))
+  (cons "issueNumber" (oref issue number)))
+
+(defmethod gh-viewer-extract-comments ((_pr ggc:pull-request) data)
+  (plist-get
+   (plist-get
+    (plist-get
+     (plist-get data :data)
+     :repository)
+    :pullRequest)
+   :comments))
+
+(defmethod gh-viewer-extract-comments ((_issue ggc:issue) data)
+  (plist-get
+   (plist-get
+    (plist-get
+     (plist-get data :data)
+     :repository)
+    :issue)
+   :comments))
+
+(cl-defmethod gh-viewer-fetch ((conn ggc:issue-comment-connection) issue-or-pr repository
                                &optional success error)
   (let* ((next-cursor (gh-viewer-next-cursor conn "ASC"))
          (owner (oref (oref repository owner) login))
          (name (oref repository name))
-         (query (gh-viewer-query gh-viewer-pull-request-comments-query-location))
+         (query (gh-viewer-comments-query issue-or-pr))
          (variables (list (cons "owner" owner)
                           (cons "name" name)
-                          (cons "pullRequestNumber" (oref pull-request number)))))
+                          (gh-viewer-number-param issue-or-pr))))
     (cl-labels
         ((on-success (data base)
                      (let ((new-conn (gh-viewer-graphql-initialize-issue-comment-connection
-                                      (plist-get
-                                       (plist-get
-                                        (plist-get
-                                         (plist-get data :data)
-                                         :repository)
-                                        :pullRequest)
-                                       :comments))))
+                                      (gh-viewer-extract-comments issue-or-pr data))))
                        (gh-viewer-merge new-conn base)
-                       (oset pull-request comments new-conn)
-                       (if (gh-viewer-has-more (oref pull-request comments) "ASC")
-                           (fetch (oref pull-request comments)
-                                  (gh-viewer-next-cursor (oref pull-request comments)
+                       (oset issue-or-pr comments new-conn)
+                       (if (gh-viewer-has-more (oref issue-or-pr comments) "ASC")
+                           (fetch (oref issue-or-pr comments)
+                                  (gh-viewer-next-cursor (oref issue-or-pr comments)
                                                          "ASC"))
                          (when (functionp success)
                            (funcall success)))))
          (on-error (data)
-                   (message "Error: %s" data))
+                   (message "Error: %s" data)
+                   (when (functionp error)
+                     (funcall error data)))
          (fetch (&optional base next-cursor)
                 (github-graphql-client-request
                  query

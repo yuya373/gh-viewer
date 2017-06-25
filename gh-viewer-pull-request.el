@@ -79,20 +79,16 @@
 ;;;###autoload
 (defun gh-viewer-pull-request-filtered (&optional query)
   (interactive)
-  (cl-labels
-      ((select-query ()
-                  (cdr (assoc
-                        (completing-read "Select Filter: " gh-viewer-issue-queries)
-                        gh-viewer-issue-queries))))
-    (let* ((repo (gh-viewer-repo-select))
-           (filter (or query (select-query))))
-      (cl-labels
-          ((open (pull-request repository)
-                 (gh-viewer-buffer-display pull-request repository)
-                 (gh-viewer-remove-unread pull-request)
-                 (gh-viewer-remove-unread (oref pull-request comments)))
-           (display (repository)
-
+  (let* ((repo (gh-viewer-repo-select))
+         (filter (or query (gh-viewer-select-query))))
+    (cl-labels
+        ((open (pull-request repository)
+               (gh-viewer-buffer-display pull-request repository)
+               (gh-viewer-remove-unread pull-request)
+               (gh-viewer-remove-unread (oref pull-request comments)))
+         (display (repository)
+                  (if (< (length (oref (oref repository pull-requests) nodes)) 1)
+                      (message "No Pull Requests in %s" (gh-viewer-stringify-short repository))
                     (let ((pull-request (gh-viewer-select
                                          (gh-viewer-filter-pull-request
                                           (oref repository pull-requests)
@@ -102,10 +98,10 @@
                             (message "Loading Comments...")
                             (gh-viewer-fetch (oref pull-request comments) pull-request repository
                                              #'(lambda () (open pull-request repository))))
-                        (open pull-request repository)))))
-        (if (gh-viewer-use-cache-p repo)
-            (display (oref repo repository))
-          (gh-viewer-fetch repo #'display))))))
+                        (open pull-request repository))))))
+      (if (gh-viewer-use-cache-p repo)
+          (display (oref repo repository))
+        (gh-viewer-fetch repo #'display)))))
 
 (provide 'gh-viewer-pull-request)
 ;;; gh-viewer-pull-request.el ends here

@@ -31,8 +31,14 @@
   (gh-viewer-filter-pull-request (oref repo pull-requests) filter))
 
 (defmethod gh-viewer-filter-pull-request ((conn ggc:pull-request-connection) filter)
+  (gh-viewer-filter-nodes conn 'ggc:pull-request-connection filter))
+
+(defmethod gh-viewer-filter-issue ((conn ggc:issue-connection) filter)
+  (gh-viewer-filter-nodes conn 'ggc:issue-connection filter))
+
+(defmethod gh-viewer-filter-nodes ((conn ggc:connection) class filter)
   (with-slots (nodes page-info total-count) conn
-    (make-instance 'ggc:pull-request-connection
+    (make-instance class
                    :nodes (cl-remove-if-not filter nodes)
                    :page-info page-info
                    :total-count total-count)))

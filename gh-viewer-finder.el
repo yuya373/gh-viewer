@@ -29,23 +29,29 @@
 (require 'gh-viewer-graphql)
 
 (defmethod gh-viewer-select ((conn ggc:pull-request-connection))
-  (let* ((alist (gh-viewer-comp-read-alist conn))
-         (selected (completing-read "Select Pull Request: " alist))
-         (id (cdr (cl-assoc selected alist :test #'string=))))
-    (gh-viewer-find-pull-request conn id)))
+  (gh-viewer--select conn "Select Pull Request: "))
 
-(defmethod gh-viewer-comp-read-alist ((conn ggc:pull-request-connection))
+(defmethod gh-viewer-select ((conn ggc:issue-connection))
+  (gh-viewer--select conn "Select Issue: "))
+
+(defmethod gh-viewer--select ((conn ggc:connection) prompt)
+  (let* ((alist (gh-viewer-comp-read-alist conn))
+         (selected (completing-read prompt alist))
+         (id (cdr (cl-assoc selected alist :test #'string=))))
+    (gh-viewer-find-node conn id)))
+
+(defmethod gh-viewer-comp-read-alist ((conn ggc:connection))
   (with-slots (nodes) conn
     (mapcar #'(lambda (e) (cons (gh-viewer-stringify-short e)
                                 (oref e id)))
             nodes)))
 
 (defmethod gh-viewer-find-pull-request ((repo ggc:repository) id)
-  (gh-viewer-find-pull-request (oref repo pull-requests) id))
+  (gh-viewer-find-node (oref repo pull-requests) id))
 
-(defmethod gh-viewer-find-pull-request ((conn ggc:pull-request-connection) id)
+(defmethod gh-viewer-find-node ((conn ggc:connection) id)
   (with-slots (nodes) conn
-    (cl-find-if #'(lambda (pr) (string= (oref pr id) id))
+    (cl-find-if #'(lambda (node) (string= (oref node id) id))
                 nodes)))
 
 (defmethod gh-viewer-find-repository ((id string))

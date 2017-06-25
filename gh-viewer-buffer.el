@@ -29,10 +29,10 @@
 (require 'github-graphql-client)
 (require 'gh-viewer-stringify-short)
 
-(defmethod gh-viewer-buffer-name ((pr ggc:pull-request) repo)
+(defmethod gh-viewer-buffer-name ((issue gh-viewer-issue) repo)
   (format "* %s - %s *"
           (gh-viewer-stringify-short repo)
-          (gh-viewer-stringify-short pr)))
+          (gh-viewer-stringify-short issue)))
 
 (defmethod gh-viewer-buffer-name ((_conn ggc:pull-request-connection) repo)
   (format "* %s - Pull Requests *"
@@ -54,16 +54,16 @@
      (setq buffer-read-only t)
      (goto-char (point-min))))
 
-(defmethod gh-viewer-buffer-display ((pr ggc:pull-request) repo)
-  (let ((buf (get-buffer-create (gh-viewer-buffer-name pr repo))))
+(defmethod gh-viewer-buffer-display ((issue gh-viewer-issue) repo)
+  (let ((buf (get-buffer-create (gh-viewer-buffer-name issue repo))))
     (gh-viewer-with-buffer buf
-        (insert (gh-viewer-stringify pr repo)))
+        (insert (gh-viewer-stringify issue)))
     (display-buffer buf)))
 
 (defmethod gh-viewer-buffer-display ((conn ggc:issue-comment-connection) pr repo)
   (let ((buf (get-buffer-create (gh-viewer-buffer-name conn pr repo))))
     (gh-viewer-with-buffer buf
-      (insert (gh-viewer-stringify conn)))
+        (insert (gh-viewer-stringify conn)))
     (display-buffer buf)))
 
 (defmethod gh-viewer-buffer-display ((conn ggc:pull-request-connection) repo)
@@ -71,7 +71,7 @@
       (message "No Pull Request in %s" (oref repo name-with-owner))
     (let ((buf (get-buffer-create (gh-viewer-buffer-name conn repo))))
       (gh-viewer-buffer buf
-        (insert (gh-viewer-stringify conn repo)))
+                        (insert (gh-viewer-stringify conn repo)))
       (display-buffer buf))))
 
 (provide 'gh-viewer-buffer)

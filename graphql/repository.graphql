@@ -5,11 +5,17 @@ query repository(
   $pullRequestOrderField: IssueOrderField!,
   $pullRequestOrderDirection: OrderDirection!,
   $pullRequestBefore: String,
+  $issueBefore: String,
+  $issueStates: [IssueState!],
+  $issueOrderField: IssueOrderField!,
+  $issueOrderDirection: OrderDirection!,
   $reviewRequestAfter: String,
   $reviewsAfter: String,
   $reviewCommentsAfter: String,
   $assigneesAfter: String,
-  $labelsAfter: String
+  $labelsAfter: String,
+  $ignorePullRequests: Boolean!,
+  $ignoreIssues: Boolean!
 ) {
   repository(owner: $owner, name: $name) {
     id
@@ -20,38 +26,67 @@ query repository(
       login
       url
     }
+    issues(
+      last: 20,
+      before: $issueBefore,
+      states: $issueStates,
+      orderBy: { field: $issueOrderField, direction: $issueOrderDirection }
+    ) @skip(if: $ignoreIssues) {
+      nodes {
+        assignees(first: 20, after: $assigneesAfter) {
+          ...userConnection
+        }
+        comments(first: 20) {
+          ...issueCommentConnection
+        }
+        participants(first: 20) {
+          ...userConnection
+        }
+        reactions(first: 20) {
+          ...reactionConnection
+        }
+        labels(first: 20, after: $labelsAfter) {
+          ...labelConnection
+        }
+        author {
+          ...actor
+        }
+        id
+        body
+        bodyText
+        closed
+        createdAt
+        editor {
+          ...actor
+        }
+        lastEditedAt
+        locked
+        number
+        publishedAt
+        url
+        state
+        title
+      }
+      pageInfo {
+        ...pageInfo
+      }
+      totalCount
+    }
     pullRequests(
       last: 20,
       before: $pullRequestBefore,
       states: $pullRequestStates,
       orderBy: { field: $pullRequestOrderField, direction: $pullRequestOrderDirection }
-    ) {
+    ) @skip(if: $ignorePullRequests) {
       nodes {
         assignees(first: 20, after: $assigneesAfter) {
-          nodes {
-            ...actor
-          }
-          pageInfo {
-            ...pageInfo
-          }
+          ...userConnection
         }
         labels(first: 20, after: $labelsAfter) {
-          nodes {
-            color
-            name
-          }
-          pageInfo {
-            ...pageInfo
-          }
+          ...labelConnection
         }
         comments(first: 20) {
-          nodes {
-            ...issueComment
-          }
-          pageInfo {
-            ...pageInfo
-          }
-          totalCount
+          ...issueCommentConnection
         }
         reviewRequests(first: 20, after: $reviewRequestAfter) {
           nodes {
@@ -83,17 +118,7 @@ query repository(
           }
         }
         reactions(first: 20) {
-          nodes {
-            id
-            content
-            user {
-              ...actor
-            }
-          }
-          pageInfo {
-            ...pageInfo
-          }
-          totalCount
+          ...reactionConnection
         }
         id
         number
@@ -116,41 +141,4 @@ query repository(
       totalCount
     }
   }
-}
-
-fragment pageInfo on PageInfo {
-  startCursor
-  endCursor
-  hasNextPage
-  hasPreviousPage
-}
-
-fragment comment on Comment {
-  body
-  author {
-    ...actor
-  }
-  publishedAt
-  editor {
-    ...actor
-  }
-  lastEditedAt
-}
-
-fragment actor on Actor {
-  avatarUrl
-  login
-  url
-}
-
-fragment issueComment on IssueComment {
-  id
-  ...comment
-  bodyText
-}
-
-fragment pullRequestReviewComment on PullRequestReviewComment {
-  id
-  ...comment
-  bodyText
 }

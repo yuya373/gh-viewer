@@ -32,8 +32,10 @@
 (defclass gh-viewer-repositories ()
   ((repositories :initarg :repositories :initform nil :type list)))
 
-(defclass gh-viewer-pull-request (ggc:pull-request)
+(defclass gh-viewer-issue (ggc:issue)
   ((new :initform nil :type boolean)))
+
+(defclass gh-viewer-pull-request (gh-viewer-issue ggc:pull-request) ())
 
 (defclass gh-viewer-issue-comment (ggc:issue-comment)
   ((new :initform nil :type boolean)))
@@ -194,14 +196,11 @@
 
 
 (defun gh-viewer-graphql-initialize-pull-request-connection (pull-requests)
-  (let ((conn (gh-viewer-graphql-initialize-connection
-               pull-requests
-               #'gh-viewer-graphql-initialize-pull-request
-               'ggc:pull-request-connection)))
-    (oset conn
-          total-count
-          (plist-get pull-requests :totalCount))
-    conn))
+  (when pull-requests
+    (gh-viewer-graphql-initialize-connection
+     pull-requests
+     #'gh-viewer-graphql-initialize-pull-request
+     'ggc:pull-request-connection)))
 
 (defun gh-viewer-graphql-initialize-repository-owner (owner)
   (make-instance 'ggc:repository-owner
@@ -209,35 +208,100 @@
                  :login (plist-get owner :login)
                  :url (plist-get owner :url)))
 
+(defun gh-viewer-graphql-initialize-issue (issue)
+  (let ((assignees (gh-viewer-graphql-initialize-user-connection
+                    (plist-get issue :assignees)))
+        (comments (gh-viewer-graphql-initialize-issue-comment-connection
+                   (plist-get issue :comments)))
+        (reactions (gh-viewer-graphql-initialize-reactions-connection
+                    (plist-get issue :reactions)))
+        (labels (gh-viewer-graphql-initialize-label-connection
+                 (plist-get issue :labels)))
+        (author (gh-viewer-graphql-initialize-actor
+                 (plist-get issue :author)))
+        (editor (gh-viewer-graphql-initialize-actor
+                 (plist-get issue :editor))))
+    (make-instance 'gh-viewer-issue
+                   :assignees assignees
+                   :comments comments
+                   :reactions reactions
+                   :labels labels
+                   :author author
+                   :id (plist-get issue :id)
+                   :body (gh-viewer-decode
+                          (plist-get issue :body))
+                   :body-text (gh-viewer-decode
+                               (plist-get issue :bodyText))
+                   :closed (gh-viewer-graphql-handle-json-boolean
+                            (plist-get issue :closed))
+                   :created-at (plist-get issue :createdAt)
+                   :editor editor
+                   :last-edited-at (plist-get issue :lastEditedAt)
+                   :locked (gh-viewer-graphql-handle-json-boolean
+                            (plist-get issue :locked))
+                   :number (plist-get issue :number)
+                   :published-at (plist-get issue :publishedAt)
+                   :url (plist-get issue :url)
+                   :state (plist-get issue :state)
+                   :title (plist-get issue :title))))
+
+(defun gh-viewer-graphql-initialize-issue-connection (issues)
+  (when issues
+    (gh-viewer-graphql-initialize-connection
+     issues
+     #'gh-viewer-graphql-initialize-issue
+     'ggc:issue-connection)))
+
 (defun gh-viewer-graphql-initialize-repository (repository)
-  (let* ((pull-requests (gh-viewer-graphql-initialize-pull-request-connection
-                         (plist-get repository :pullRequests)))
-         (owner (gh-viewer-graphql-initialize-repository-owner
-                 (plist-get repository :owner)))
-         (id (plist-get repository :id))
-         (repo (make-instance 'ggc:repository
-                              :id id
-                              :name (plist-get repository :name)
-                              :name-with-owner (plist-get repository :nameWithOwner)
-                              :owner owner
-                              :pull-requests pull-requests))
-         )
-    repo))
+  (let ((pull-requests (gh-viewer-graphql-initialize-pull-request-connection
+                        (plist-get repository :pullRequests)))
+        (owner (gh-viewer-graphql-initialize-repository-owner
+                (plist-get repository :owner)))
+        (issues (gh-viewer-graphql-initialize-issue-connection
+                 (plist-get repository :issues))))
+    (apply #'make-instance
+           'ggc:repository
+           :id (plist-get repository :id)
+           :name (plist-get repository :name)
+           :name-with-owner (plist-get repository :nameWithOwner)
+           :owner owner
+           (or (and pull-requests issues
+                    (list :pull-requests pull-requests :issues issues))
+               (and issues
+                    (list :issues issues))
+               (and pull-requests
+                    (list :pull-requests pull-requests))))))
 
-(defmethod gh-viewer-equal-p ((comment ggc:issue-comment) other)
-  (string= (oref comment id) (oref other id)))
+;; (defmethod gh-viewer-equal-p ((comment ggc:issue-comment) other)
+;;   (string= (oref comment id) (oref other id)))
 
-(defmethod gh-viewer-equal-p ((pr ggc:pull-request) other)
-  (string= (oref pr id) (oref other id)))
+(defmethod gh-viewer-equal-p ((node ggc:node) other)
+  (string= (oref node id) (oref other id)))
 
 (defmethod gh-viewer-merge ((base ggc:repository) new &optional ignore-new-flag)
   (oset base name (oref new name))
   (oset base owner (oref new owner))
   (oset base name-with-owner (oref new name-with-owner))
-  (oset base pull-requests (gh-viewer-merge
-                            (oref base pull-requests)
-                            (oref new pull-requests)
-                            ignore-new-flag))
+  (if (and (slot-boundp base 'pull-requests)
+           (slot-boundp new 'pull-requests))
+      (oset base pull-requests (gh-viewer-merge
+                                (oref base pull-requests)
+                                (oref new pull-requests)
+                                ignore-new-flag)))
+  (if (and (not (slot-boundp base 'pull-requests))
+           (slot-boundp new 'pull-requests))
+      (oset base pull-requests (oref new pull-requests)))
+
+  (if (and (slot-boundp base 'issues)
+           (slot-boundp new 'issues))
+      (oset base issues (gh-viewer-merge
+                         (oref base issues)
+                         (oref new issues)
+                         ignore-new-flag)))
+
+  (if (and (not (slot-boundp base 'issues))
+           (slot-boundp new 'issues))
+      (oset base issues (oref new issues)))
   base)
 
 (defmethod gh-viewer-merge ((new-comment gh-viewer-issue-comment) old-comment &optional ignore-new-flag)
@@ -255,9 +319,10 @@
 
   (oref base total-count)
 
-  (if (or (oref old has-new-comments)
-          (< (oref old total-count)
-             (oref base total-count)))
+  (if (and (not ignore-new-flag)
+           (or (oref old has-new-comments)
+               (< (oref old total-count)
+                  (oref base total-count))))
       (oset base has-new-comments t))
   base)
 
@@ -268,25 +333,31 @@
         (gh-viewer-merge (oref pr comments) (oref old comments) ignore-new-flag))
     (and (not ignore-new-flag) (oset pr new t))))
 
-(defmethod gh-viewer-merge ((base ggc:pull-request-connection) new &optional ignore-new-flag)
-  (let ((old-pull-requests (oref base nodes))
-        (new-pull-requests (oref new nodes)))
-    (if (< (length old-pull-requests) 1)
-        (oset base nodes new-pull-requests)
+(defmethod gh-viewer-merge ((issue gh-viewer-issue) old &optional ignore-new-flag)
+  (if old
+      (progn
+        (and (not ignore-new-flag) (oset issue new (oref old new)))
+        (gh-viewer-merge (oref issue comments) (oref old comments) ignore-new-flag))
+    (and (not ignore-new-flag) (oset issue new t))))
 
-      (cl-loop for pr in new-pull-requests
-               do (let ((old (cl-find-if #'(lambda (e) (gh-viewer-equal-p pr e)) old-pull-requests)))
-                    (gh-viewer-merge pr old ignore-new-flag)))
-      (mapc #'(lambda (pr) (cl-pushnew pr new-pull-requests :test #'gh-viewer-equal-p))
-            old-pull-requests)
-      (oset base nodes (cl-sort new-pull-requests #'> :key #'(lambda (pr) (oref pr number)))))
+(defmethod gh-viewer-merge ((base ggc:connection) new &optional ignore-new-flag)
+  (let ((old-nodes (oref base nodes))
+        (new-nodes (oref new nodes)))
+    (if (< (length old-nodes) 1)
+        (oset base nodes new-nodes)
 
-    (oset base total-count (oref new total-count))
-    (oset base page-info (oref new page-info)))
+      (cl-loop for node in new-nodes
+               do (let ((old (cl-find-if #'(lambda (e) (gh-viewer-equal-p node e)) old-nodes)))
+                    (gh-viewer-merge node old ignore-new-flag)))
+      (mapc #'(lambda (node) (cl-pushnew node new-nodes :test #'gh-viewer-equal-p))
+            old-nodes)
+      (oset base nodes (cl-sort new-nodes #'> :key #'(lambda (pr) (oref pr number))))))
+  (oset base total-count (oref new total-count))
+  (oset base page-info (oref new page-info))
   base)
 
-(defmethod gh-viewer-remove-unread ((pr gh-viewer-pull-request))
-  (oset pr new nil))
+(defmethod gh-viewer-remove-unread ((issue gh-viewer-issue))
+  (oset issue new nil))
 
 (defmethod gh-viewer-remove-unread ((conn gh-viewer-issue-comment-connection))
   (oset conn has-new-comments nil))

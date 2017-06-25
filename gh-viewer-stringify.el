@@ -166,79 +166,109 @@
 (defmethod gh-viewer-format-section-title ((title string))
   (propertize title 'face 'gh-viewer-pull-request-section-title))
 
+(defmethod gh-viewer-stringify-assignees ((issue gh-viewer-issue))
+  (let ((str (gh-viewer-stringify (oref issue assignees))))
+    (or (and (gh-viewer-blank? str) "")
+        (format "%s %s\n"
+                (gh-viewer-format-section-title "Assignees:")
+                str))))
 
-(defmethod gh-viewer-stringify ((pr ggc:pull-request) repo)
-  (cl-labels
-      ((open-comments ()
-                      (interactive)
-                      (gh-viewer-buffer-display (oref pr comments) pr repo))
-       (browse-pull-request ()
-                            (interactive)
-                            (browse-url (oref pr url))))
-    (let ((assignees (let ((str (gh-viewer-stringify (oref pr assignees))))
-                       (or (and (gh-viewer-blank? str) "")
-                           (format "%s %s\n"
-                                   (gh-viewer-format-section-title "Assignees:")
-                                   str))))
-          (labels (let ((str (gh-viewer-stringify (oref pr labels))))
-                    (or (and (gh-viewer-blank? str) "")
-                        (format "%s %s\n"
-                                (gh-viewer-format-section-title "Labels:")
-                                str))))
-          (comments (let ((str (gh-viewer-stringify (oref pr comments))))
-                      (or (and (gh-viewer-blank? str) "")
-                          (let* ((total (oref (oref pr comments) total-count))
-                                 (max total))
-                            (format "%s%s\n%s\n%s\n"
-                                    (gh-viewer-format-section-title (format "%s Comments:" total))
-                                    (if (< max total)
-                                        (format " displaying last %s comments" max)
-                                      "")
-                                    str
-                                    (if (< max total)
-                                        (format "\n%s\n"
-                                                (propertize "[Load More Comments]"
-                                                            'face 'gh-viewer-clickable
-                                                            'keymap (let ((map (make-sparse-keymap)))
-                                                                      (define-key map (kbd "RET") #'open-comments)
-                                                                      map)))
-                                      ""))))))
+(defmethod gh-viewer-stringify-labels ((issue gh-viewer-issue))
+  (let ((str (gh-viewer-stringify (oref issue labels))))
+    (or (and (gh-viewer-blank? str) "")
+        (format "%s %s\n"
+                (gh-viewer-format-section-title "Labels:")
+                str))))
 
-          (title (propertize (format "%s\n" (oref pr title))
-                             'face 'gh-viewer-pull-request-title
-                             'keymap (let ((map (make-sparse-keymap)))
-                                       (define-key map (kbd "RET") #'browse-pull-request)
-                                       map)))
-          (author (gh-viewer-stringify (oref pr author)))
-          (info
-           (format "%s wants to merge into %s from %s\n"
-                   (gh-viewer-stringify (oref pr author))
-                   (oref pr base-ref-name)
-                   (oref pr head-ref-name)))
-          (review-requests (let ((str (gh-viewer-stringify (oref pr review-requests))))
-                             (or (and (gh-viewer-blank? str) "")
-                                 (format "%s %s\n" (gh-viewer-format-section-title "Review Requests:")
-                                         str))))
-          (reviews (let ((str (gh-viewer-stringify (oref pr reviews))))
-                     (or (and (gh-viewer-blank? str) "")
-                         (format "%s\n%s" (gh-viewer-format-section-title "Reviews:")
-                                 str))))
-          (body (format "%s\n\n" (oref pr body)))
-          (separator (mapconcat #'identity
-                                (cl-loop for i from 1 to 80
-                                         collect "-")
-                                ""))
-          (reactions (let ((str (gh-viewer-stringify (oref pr reactions))))
-                       (or (and (gh-viewer-blank? str) "")
-                           (format "%s\n" str)))))
-      (format "%s%s%s%s%s%s"
-              (format "%s%s%s%s%s" title info assignees labels review-requests)
-              (format "\n%s\n\n" separator)
-              body
-              (format "%s\n" separator)
-              (format "%s\n" reactions)
-              (format "%s%s" comments reviews)
-              ))))
+(defmethod gh-viewer-stringify-comments ((issue gh-viewer-issue))
+  (let ((str (gh-viewer-stringify (oref issue comments)))
+        (total-count (oref (oref issue comments) total-count)))
+    (or (and (gh-viewer-blank? str) "")
+        (format "%s\n%s\n"
+                (gh-viewer-format-section-title
+                 (format "%s Comment%s:"
+                         (oref (oref issue comments) total-count)
+                         (if (< 1 total-count) "s"
+                           "")))
+                str))))
+
+(defmethod gh-viewer-stringify-title ((issue gh-viewer-issue))
+  (propertize (format "%s\n" (oref issue title))
+              'face 'gh-viewer-pull-request-title
+              'keymap (let ((map (make-sparse-keymap)))
+                        (define-key map (kbd "RET") #'(lambda ()
+                                                        (interactive)
+                                                        (browse-url (oref issue url))))
+                        map)))
+
+(defmethod gh-viewer-stringify-body ((issue gh-viewer-issue))
+  (format "%s\n\n" (oref issue body)))
+
+(defmethod gh-viewer-stringify-reactions ((issue gh-viewer-issue))
+  (let ((str (gh-viewer-stringify (oref issue reactions))))
+    (or (and (gh-viewer-blank? str) "")
+        (format "%s\n" str))))
+
+(defmethod gh-viewer-stringify-separator ((_issue gh-viewer-issue))
+  (mapconcat #'identity
+             (cl-loop for i from 1 to 80
+                      collect "-")
+             ""))
+
+(defmethod gh-viewer-stringify ((issue ggc:issue))
+  (let* ((assignees (gh-viewer-stringify-assignees issue))
+         (labels (gh-viewer-stringify-labels issue))
+         (comments (gh-viewer-stringify-comments issue))
+         (title (gh-viewer-stringify-title issue))
+         (author (gh-viewer-stringify (oref issue author)))
+         (body (gh-viewer-stringify-body issue))
+         (separator (gh-viewer-stringify-separator issue))
+         (reactions (gh-viewer-stringify-reactions issue))
+         (comments-count (oref (oref issue comments) total-count))
+         (info (format "%s opened this issue %s · %s comment%s\n"
+                       author
+                       (gh-viewer-format-time-string (oref issue published-at))
+                       comments-count
+                       (if (< 1 comments-count) "s"
+                         ""))))
+    (format "%s%s%s%s%s%s"
+            (format "%s%s%s%s" title info assignees labels)
+            (format "\n%s\n\n" separator)
+            body
+            (format "%s\n" separator)
+            (format "%s\n" reactions)
+            comments)))
+
+(defmethod gh-viewer-stringify ((pr ggc:pull-request))
+  (let ((assignees (gh-viewer-stringify-assignees pr))
+        (labels (gh-viewer-stringify-labels pr))
+        (comments (gh-viewer-stringify-comments pr))
+        (title (gh-viewer-stringify-title pr))
+        (author (gh-viewer-stringify (oref pr author)))
+        (info
+         (format "%s wants to merge into %s from %s\n"
+                 (gh-viewer-stringify (oref pr author))
+                 (oref pr base-ref-name)
+                 (oref pr head-ref-name)))
+        (review-requests (let ((str (gh-viewer-stringify (oref pr review-requests))))
+                           (or (and (gh-viewer-blank? str) "")
+                               (format "%s %s\n" (gh-viewer-format-section-title "Review Requests:")
+                                       str))))
+        (reviews (let ((str (gh-viewer-stringify (oref pr reviews))))
+                   (or (and (gh-viewer-blank? str) "")
+                       (format "%s\n%s" (gh-viewer-format-section-title "Reviews:")
+                               str))))
+        (body (gh-viewer-stringify-body pr))
+        (separator (gh-viewer-stringify-separator pr))
+        (reactions (gh-viewer-stringify-reactions pr)))
+    (format "%s%s%s%s%s%s"
+            (format "%s%s%s%s%s" title info assignees labels review-requests)
+            (format "\n%s\n\n" separator)
+            body
+            (format "%s\n" separator)
+            (format "%s\n" reactions)
+            (format "%s%s" comments reviews)
+            )))
 
 (defmethod gh-viewer-stringify ((conn ggc:reaction-connection))
   (cl-labels
