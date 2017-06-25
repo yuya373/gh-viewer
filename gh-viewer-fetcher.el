@@ -61,41 +61,56 @@
 (defvar gh-viewer-before-merge-hook nil
   "Hook runs before Repository merged.\n`(lambda (new-repository old-repository) ...)'.")
 
-(defmethod gh-viewer-notifier ((new ggc:pull-request) old repo)
+(defmethod gh-viewer-notifier-template ((_ ggc:pull-request))
+  "Pull Request #%s has %s new Comment%s")
+
+(defmethod gh-viewer-notifier-template ((_ ggc:issue))
+  "Issue #%s has %s new Comment%s")
+
+(defmethod gh-viewer-notifier ((new gh-viewer-issue) old repo)
   (when old
     (let* ((new-comment-count (oref (oref new comments) total-count))
            (old-comment-count (oref (oref old comments) total-count))
            (comment-count-diff (- new-comment-count old-comment-count)))
       (if (< 0 comment-count-diff)
-          (alert (format "#%s has %s new Comment%s"
+          (alert (format (gh-viewer-notifier-template new)
                          (oref new number)
                          comment-count-diff
                          (or (and (< 1 comment-count-diff) "s")
                              ""))
                  :title (gh-viewer-stringify-short repo))))))
 
-(defmethod gh-viewer-notifier ((new ggc:pull-request-connection) old repo)
+(defmethod gh-viewer-notifier-template ((_conn ggc:pull-request-connection))
+  "has %s new Pull Request%s")
+
+(defmethod gh-viewer-notifier-templage ((_conn ggc:issue-connection))
+  "has %s new Issue%s")
+
+(defmethod gh-viewer-notifier ((new ggc:connection) old repo)
   (let* ((new-total-count (oref new total-count))
          (old-total-count (oref old total-count))
          (total-count-diff (- new-total-count old-total-count)))
     (if (< 0 total-count-diff)
-        (alert (format "has %s new Pull Request%s"
+        (alert (format (gh-viewer-notifier-template new)
                        total-count-diff
                        (or (and (< 1 total-count-diff) "s")
                            ""))
                :title (gh-viewer-stringify-short repo)))
-    (mapc #'(lambda (new-pr)
-              (gh-viewer-notifier new-pr
-                                  (cl-find-if #'(lambda (old-pr) (string= (oref old-pr id)
-                                                                          (oref new-pr id)))
+    (mapc #'(lambda (new-node)
+              (gh-viewer-notifier new-node
+                                  (cl-find-if #'(lambda (old-node) (string= (oref old-node id)
+                                                                            (oref new-node id)))
                                               (oref old nodes))
                                   repo))
           (oref new nodes))))
 
 (defmethod gh-viewer-notifier ((new-repository ggc:repository) old-repository)
   (let ((new-pull-requests (oref new-repository pull-requests))
-        (old-pull-requests (oref old-repository pull-requests)))
-    (gh-viewer-notifier new-pull-requests old-pull-requests new-repository)))
+        (old-pull-requests (oref old-repository pull-requests))
+        (new-issues (oref new-repository issues))
+        (old-issues (oref old-repository issues)))
+    (gh-viewer-notifier new-pull-requests old-pull-requests new-repository)
+    (gh-viewer-notifier new-issues old-issues new-repository)))
 
 (defun gh-viewer-query (location)
   (with-temp-buffer
