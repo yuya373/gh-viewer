@@ -139,8 +139,7 @@
 
 (defmethod gh-viewer-use-cache-p ((repo gh-viewer-repo))
   (and (oref repo repository)
-       (< (- (time-to-seconds) (oref repo last-fetched)) (* 60 5)))
-  nil)
+       (< (- (time-to-seconds) (oref repo last-fetched)) (* 60 5))))
 
 (provide 'gh-viewer-repo)
 ;;; gh-viewer-repo.el ends here
