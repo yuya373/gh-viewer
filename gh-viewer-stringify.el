@@ -91,8 +91,8 @@
 
 (defmethod gh-viewer-stringify ((label ggc:label))
   (with-slots (name color) label
-    (propertize (format "#%s" name)
-                'face (list :foreground color))))
+    (propertize name
+                'face (list :foreground (format "#%s" color)))))
 
 (defmethod gh-viewer-stringify ((conn ggc:label-connection))
   (with-slots (nodes) conn

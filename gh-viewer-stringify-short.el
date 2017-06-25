@@ -38,14 +38,21 @@
    ((cl-typep state 'ggc:commented) 'warning)
    ((cl-typep state 'ggc:approved) 'success)))
 
+(defmethod gh-viewer-stringify-short ((conn ggc:label-connection))
+  (with-slots (nodes) conn
+    (let ((str (mapconcat #'gh-viewer-stringify nodes ", ")))
+      (if (gh-viewer-blank? str) ""
+        (format "[%s]" str)))))
+
 (defmethod gh-viewer-stringify-short ((issue gh-viewer-issue))
   (with-slots (number state title comments) issue
     (let ((comments-count (format "%2d" (oref comments total-count)))
           (author (format "by %s" (gh-viewer-stringify (oref issue author))))
           (new (if (oref issue new)
                    (propertize "*" 'face 'error)
-                 " ")))
-      (format "%s #%s [%s] [%s] %s %s"
+                 " "))
+          (labels (gh-viewer-stringify-short (oref issue labels))))
+      (format "%s #%s [%s] [%s] %s %s %s"
               new
               (format "%4d" number)
               state
@@ -53,7 +60,8 @@
                   (propertize comments-count 'face 'error)
                 comments-count)
               (propertize title 'face 'bold)
-              author))))
+              author
+              labels))))
 
 (defmethod gh-viewer-stringify-short ((pr ggc:pull-request))
   (let ((str (cl-call-next-method))
