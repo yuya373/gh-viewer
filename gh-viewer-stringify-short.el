@@ -44,36 +44,39 @@
       (if (gh-viewer-blank? str) ""
         (format " [%s]" str)))))
 
-(defmethod gh-viewer-stringify-short ((issue gh-viewer-issue))
-  (with-slots (number state title comments) issue
-    (let* ((comments-count (format "%2d" (oref comments total-count)))
-           (author (format "by %s" (gh-viewer-stringify (oref issue author))))
-           (new (if (oref issue new)
-                    (propertize "*" 'face 'error)
-                  " "))
-           (labels (gh-viewer-stringify-short (oref issue labels))))
-      (format "%s #%s [%s] [%s] %s %s%s"
-              new
-              (format "%4d" number)
-              state
-              (if (oref (oref issue comments) has-new-comments)
-                  (propertize comments-count 'face 'error)
-                comments-count)
-              (propertize title 'face 'bold)
-              author
-              labels))))
+(cl-defmethod gh-viewer-stringify-short :around ((issue gh-viewer-issue))
+              (with-slots (number state title comments) issue
+                (let* ((comments-count (format "%2d" (oref comments total-count)))
+                       (author (format "by %s" (gh-viewer-stringify (oref issue author))))
+                       (new (if (oref issue new)
+                                (propertize "*" 'face 'error)
+                              " "))
+                       (labels (gh-viewer-stringify-short (oref issue labels)))
+                       (base (format "%s #%s [%s] [%s] %s %s%s"
+                                     new
+                                     (format "%4d" number)
+                                     state
+                                     (if (oref (oref issue comments) has-new-comments)
+                                         (propertize comments-count 'face 'error)
+                                       comments-count)
+                                     (propertize title 'face 'bold)
+                                     author
+                                     labels)))
 
-(defmethod gh-viewer-stringify-short ((pr gh-viewer-pull-request))
-  (let ((str (call-next-method))
-        (review-states (gh-viewer-stringify-short (oref pr reviews))))
-    (format "%s%s" str
-            (if (< 0 (length review-states))
-                (format " [%s]" (mapconcat #'identity
-                                           (mapcar #'(lambda (e) (propertize e
-                                                                             'face (gh-viewer-review-status-face e)))
-                                                   review-states)
-                                           ", "))
-              ""))))
+                  (format "%s%s" base (cl-call-next-method)))))
+
+(cl-defmethod gh-viewer-stringify-short ((issue gh-viewer-issue))
+  "")
+
+(cl-defmethod gh-viewer-stringify-short ((pr gh-viewer-pull-request))
+  (let ((review-states (gh-viewer-stringify-short (oref pr reviews))))
+    (if (< 0 (length review-states))
+        (format " [%s]" (mapconcat #'identity
+                                   (mapcar #'(lambda (e) (propertize e
+                                                                     'face (gh-viewer-review-status-face e)))
+                                           review-states)
+                                   ", "))
+      "")))
 
 (defmethod gh-viewer-stringify-short ((repo ggc:repository))
   (oref repo name-with-owner))
