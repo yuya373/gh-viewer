@@ -33,28 +33,35 @@
   "Github Token."
   :group 'gh-viewer)
 
+(defvar gh-viewer-directory
+  (or (and load-file-name (file-name-directory load-file-name))
+      (and (locate-library "gh-viewer") (file-name-directory (locate-library "gh-viewer")))))
+
+(defun gh-viewer-query-location (name)
+  (expand-file-name (concat gh-viewer-directory (format "graphql/%s.graphql" name))))
+
 (defcustom gh-viewer-repository-query-location
-  (concat user-emacs-directory "el-get/gh-viewer/graphql/repository.graphql")
+  (gh-viewer-query-location "repository")
   "Query for fetch repository."
   :group 'gh-viewer)
 
 (defcustom gh-viewer-pull-request-comments-query-location
-  (concat user-emacs-directory "el-get/gh-viewer/graphql/pull-request-comments.graphql")
+  (gh-viewer-query-location "pull-request-comments")
   "Query for fetch Pull Request Comments."
   :group 'gh-viewer)
 
 (defcustom gh-viewer-issue-comments-query-location
-  (concat user-emacs-directory "el-get/gh-viewer/graphql/issue-comments.graphql")
+  (gh-viewer-query-location "issue-comments")
   "Query for fetch Issue Comments."
   :group 'gh-viewer)
 
 (defcustom gh-viewer-repository-fragments-location
-  (concat user-emacs-directory "el-get/gh-viewer/graphql/repository-fragments.graphql")
+  (gh-viewer-query-location "repository-fragments")
   "Shared Query for graphql."
   :group 'gh-viewer)
 
 (defcustom gh-viewer-issue-comment-connection-fragment-location
-  (concat user-emacs-directory "el-get/gh-viewer/graphql/issue-comment-connection-fragment.graphql")
+  (gh-viewer-query-location "issue-comment-connection-fragment")
   "Fragment of IssueCommentConnection."
   :group 'gh-viewer)
 
