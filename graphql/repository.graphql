@@ -141,4 +141,10 @@ query repository(
       totalCount
     }
   }
+  rateLimit {
+    limit
+    cost
+    remaining
+    resetAt
+  }
 }

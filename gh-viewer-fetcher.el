@@ -172,6 +172,7 @@
                                  (when (functionp success)
                                    (funcall success repo)))))
          (on-success (data base)
+                     (message "RateLimit: %s, %s/%s" (plist-get (plist-get data :data) :rateLimit) owner name)
                      (let* ((repo (gh-viewer-graphql-initialize-repository
                                    (plist-get (plist-get data :data) :repository))))
 
