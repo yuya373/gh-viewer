@@ -27,6 +27,14 @@
 (require 'gh-viewer-repo)
 (require 'gh-viewer-pull-request)
 (require 'gh-viewer-issue)
+(require 'gh-viewer-notification)
+(require 'gh-viewer-graphql)
+(require 'gh-viewer-stringify)
+(require 'gh-viewer-summarize)
+(require 'gh-viewer-finder)
+(require 'gh-viewer-filter)
+(require 'gh-viewer-buffer)
+(require 'gh-viewer-fetcher)
 
 (defcustom gh-viewer-completing-read-alist
   (list
@@ -48,7 +56,6 @@
     (unless fun
       (error "Select one feature"))
     (funcall fun)))
-
 
 
 (provide 'gh-viewer)

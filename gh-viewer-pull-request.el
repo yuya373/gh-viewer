@@ -23,6 +23,7 @@
 ;;
 
 ;;; Code:
+(require 'eieio)
 (require 'gh)
 (require 'gh-viewer-repo)
 (require 'gh-viewer-issue)
@@ -44,27 +45,22 @@
 ;;;###autoload
 (defun gh-viewer-pull-request (&optional invalidate-cache)
   (interactive)
-  (let* ((repo (gh-viewer-repo-select))
-         (buf (gh-viewer-pull-request--create-buffer repo)))
-    (cl-labels
-        ((display (issues)
-                  (gh-viewer-pull-request-render
-                   buf
-                   (gh-viewer-pull-request-remove-issues issues))))
-      (gh-viewer-repo-issues repo #'display invalidate-cache))))
+  (gh-viewer-pull-request-filtered #'identity))
 
-(defun gh-viewer-pull-request-render (buf pulls)
+(defun gh-viewer-pull-request-render (repo pulls)
   (if (eq 0 (length pulls))
       (error "No Pull Requests")
-    (with-current-buffer buf
-      (setq buffer-read-only nil)
-      (mapc #'(lambda (pr)
-                (insert (gh-viewer-issue-propertize-issue pr))
-                (insert "\n"))
-            pulls)
-      (setq buffer-read-only t)
-      (goto-char (point-min)))
-    (display-buffer buf)))
+    (let ((buf (gh-viewer-pull-request--create-buffer repo)))
+      (with-current-buffer buf
+        (setq buffer-read-only nil)
+        (mapc #'(lambda (pr)
+                  (insert (gh-viewer-issue-propertize-issue pr))
+                  (insert (gh-viewer-issue-view-comments-button pr repo))
+                  (insert "\n"))
+              pulls)
+        (setq buffer-read-only t)
+        (goto-char (point-min)))
+      (display-buffer buf))))
 
 (defun gh-viewer-pull-request-remove-issues (issues)
   (cl-remove-if #'(lambda (issue)
@@ -77,23 +73,35 @@
          (pulls (gh-viewer-pull-request-remove-issues (oref repo issues)))
          (assignee (read-from-minibuffer "Input Assignee: ")))
     (gh-viewer-pull-request-render
-     (gh-viewer-pull-request--create-buffer repo)
+     repo
      (gh-viewer-issue--filter-by-assignee pulls assignee))))
 
 ;;;###autoload
-(defun gh-viewer-pull-request-filtered ()
+(defun gh-viewer-pull-request-filtered (&optional query)
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
-         (query (cdr (assoc query-name gh-viewer-issue-queries))))
+         (filter (or query (gh-viewer-select-query))))
     (cl-labels
-        ((display (issues)
-                  (gh-viewer-pull-request-render
-                   (gh-viewer-pull-request--create-buffer repo)
-                   (cl-remove-if-not query
-                                     (gh-viewer-pull-request-remove-issues issues)))))
-      (gh-viewer-repo-issues repo #'display))))
-
+        ((open (pull-request repository)
+               (gh-viewer-buffer-display pull-request repository)
+               (gh-viewer-remove-unread pull-request)
+               (gh-viewer-remove-unread (oref pull-request comments)))
+         (display (repository)
+                  (if (< (length (oref (oref repository pull-requests) nodes)) 1)
+                      (message "No Pull Requests in %s" (gh-viewer-stringify-short repository))
+                    (let ((pull-request (gh-viewer-select
+                                         (gh-viewer-filter-pull-request
+                                          (oref repository pull-requests)
+                                          filter))))
+                      (if (gh-viewer-has-more (oref pull-request comments) "ASC")
+                          (progn
+                            (message "Loading Comments...")
+                            (gh-viewer-fetch (oref pull-request comments) pull-request repository
+                                             #'(lambda () (open pull-request repository))))
+                        (open pull-request repository))))))
+      (if (gh-viewer-use-cache-p repo)
+          (display (oref repo repository))
+        (gh-viewer-fetch repo #'display)))))
 
 (provide 'gh-viewer-pull-request)
 ;;; gh-viewer-pull-request.el ends here

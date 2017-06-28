@@ -1,0 +1,14 @@
+query issueComments(
+  $owner: String!,
+  $name: String!,
+  $issueNumber: Int!,
+  $commentsAfter: String
+) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $issueNumber) {
+      comments(first: 100, after: $commentsAfter) {
+        ...issueCommentConnection
+      }
+    }
+  }
+}

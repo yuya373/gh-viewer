@@ -1,0 +1,150 @@
+query repository(
+  $owner: String!,
+  $name: String!,
+  $pullRequestStates: [PullRequestState!],
+  $pullRequestOrderField: IssueOrderField!,
+  $pullRequestOrderDirection: OrderDirection!,
+  $pullRequestBefore: String,
+  $issueBefore: String,
+  $issueStates: [IssueState!],
+  $issueOrderField: IssueOrderField!,
+  $issueOrderDirection: OrderDirection!,
+  $reviewRequestAfter: String,
+  $reviewsAfter: String,
+  $reviewCommentsAfter: String,
+  $assigneesAfter: String,
+  $labelsAfter: String,
+  $ignorePullRequests: Boolean!,
+  $ignoreIssues: Boolean!
+) {
+  repository(owner: $owner, name: $name) {
+    id
+    name
+    nameWithOwner
+    owner {
+      avatarUrl
+      login
+      url
+    }
+    issues(
+      last: 20,
+      before: $issueBefore,
+      states: $issueStates,
+      orderBy: { field: $issueOrderField, direction: $issueOrderDirection }
+    ) @skip(if: $ignoreIssues) {
+      nodes {
+        assignees(first: 20, after: $assigneesAfter) {
+          ...userConnection
+        }
+        comments(first: 20) {
+          ...issueCommentConnection
+        }
+        participants(first: 20) {
+          ...userConnection
+        }
+        reactions(first: 20) {
+          ...reactionConnection
+        }
+        labels(first: 20, after: $labelsAfter) {
+          ...labelConnection
+        }
+        author {
+          ...actor
+        }
+        id
+        body
+        bodyText
+        closed
+        createdAt
+        editor {
+          ...actor
+        }
+        lastEditedAt
+        locked
+        number
+        publishedAt
+        url
+        state
+        title
+      }
+      pageInfo {
+        ...pageInfo
+      }
+      totalCount
+    }
+    pullRequests(
+      last: 20,
+      before: $pullRequestBefore,
+      states: $pullRequestStates,
+      orderBy: { field: $pullRequestOrderField, direction: $pullRequestOrderDirection }
+    ) @skip(if: $ignorePullRequests) {
+      nodes {
+        assignees(first: 20, after: $assigneesAfter) {
+          ...userConnection
+        }
+        labels(first: 20, after: $labelsAfter) {
+          ...labelConnection
+        }
+        comments(first: 20) {
+          ...issueCommentConnection
+        }
+        reviewRequests(first: 20, after: $reviewRequestAfter) {
+          nodes {
+            reviewer {
+              ...actor
+            }
+          }
+          pageInfo {
+            ...pageInfo
+          }
+          totalCount
+        }
+        reviews(first: 20, after: $reviewsAfter) {
+          nodes {
+            comments(first: 20, after: $reviewCommentsAfter) {
+              nodes {
+                ...pullRequestReviewComment
+              }
+              pageInfo {
+                ...pageInfo
+              }
+              totalCount
+            }
+            ...comment
+            state
+          }
+          pageInfo {
+            ...pageInfo
+          }
+        }
+        reactions(first: 20) {
+          ...reactionConnection
+        }
+        id
+        number
+        title
+        author
+        headRefName
+        baseRefName
+        mergeable
+        merged
+        mergedAt
+        state
+        url
+        publishedAt
+        ...comment
+        bodyText
+      }
+      pageInfo {
+        ...pageInfo
+      }
+      totalCount
+    }
+  }
+  rateLimit {
+    limit
+    cost
+    remaining
+    resetAt
+  }
+}

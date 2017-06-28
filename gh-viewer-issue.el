@@ -24,6 +24,7 @@
 
 ;;; Code:
 (require 'gh)
+(require 'emojify)
 (require 'gh-viewer-util)
 (require 'gh-viewer-repo)
 
@@ -70,14 +71,7 @@
 ;;;###autoload
 (defun gh-viewer-issue (&optional invalidate-cache)
   (interactive)
-  (let* ((repo (gh-viewer-repo-select))
-         (buf (gh-viewer-issue--create-buffer repo)))
-    (cl-labels
-        ((display (issues)
-                  (gh-viewer-issue-render
-                   buf
-                   (cl-remove-if #'gh-viewer-pull-request-p issues))))
-      (gh-viewer-repo-issues repo #'display invalidate-cache))))
+  (gh-viewer-issue-filtered #'identity))
 
 (defun gh-viewer-issue-propertize-issue-property (prop-name)
   (propertize prop-name 'face 'gh-viewer-issue-property-name-face))
@@ -113,76 +107,145 @@
    'url (oref issue html-url)
    'keymap gh-viewer-issue-keymap))
 
-(defun gh-viewer-issue-render (buf issues)
-  (if (eq 0 (length issues))
-      (error "No Issues")
+(defmethod gh-viewer-issue-comment-buffer-name ((issue gh-issues-issue) repo)
+  (format "*Gh-Viewer: %s Issue: %s - Comments*"
+          (gh-viewer-stringify repo)
+          (oref issue title)))
+
+(defmethod gh-viewer-issue-comment-to-string ((comment gh-comment))
+  (with-slots (body user updated-at created-at) comment
+    (let ((header (format "%s%s"
+                          (propertize (oref user login) 'face '(:height 1.2 :underline t :weight bold :foreground "#FFA000"))
+                          (propertize (format " commented at %s" (gh-viewer-format-time-string updated-at))
+                                      'face '(:underline t :foreground "#FFA000")))))
+      (format "%s\n\n%s\n" header (replace-regexp-in-string "" "" body)))))
+
+(defmethod gh-viewer-issue-open-comment-buffer ((issue gh-issues-issue) repo)
+  (let* ((response (gh-issues-comments-list (gh-issues-api :sync nil :cache nil)
+                                            (oref repo user) (oref repo repo)
+                                            (oref issue number)))
+         (comments (oref response data))
+         (buf (get-buffer-create (gh-viewer-issue-comment-buffer-name issue repo))))
     (with-current-buffer buf
       (setq buffer-read-only nil)
-      (mapc #'(lambda (issue)
-                (insert (gh-viewer-issue-propertize-issue issue))
-                (insert "\n"))
-            issues)
+      (erase-buffer)
+      (emojify-mode)
+      (mapc #'(lambda (comment)
+                (insert (gh-viewer-issue-comment-to-string comment))
+                (insert "\n\n"))
+            comments)
       (setq buffer-read-only t)
       (goto-char (point-min)))
     (display-buffer buf)))
 
+(defmethod gh-viewer-issue-view-comments-button ((issue gh-issues-issue) repo)
+  (if (< 0 (oref issue comments))
+      (cl-labels
+          ((open-comment-buffer ()
+                                (interactive)
+                                (gh-viewer-issue-open-comment-buffer issue repo)))
+        (propertize "[View Comments]\n"
+                    'face '(:underline t)
+                    'keymap (let ((map (make-sparse-keymap)))
+                              (define-key map (kbd "RET") #'open-comment-buffer)
+                              map)))
+    ""))
+
+(defun gh-viewer-issue-render (repo issues)
+  (if (eq 0 (length issues))
+      (error "No Issues")
+    (let ((buf (gh-viewer-issue--create-buffer repo)))
+      (with-current-buffer buf
+        (setq buffer-read-only nil)
+        (mapc #'(lambda (issue)
+                  (insert (gh-viewer-issue-propertize-issue issue))
+                  (insert (gh-viewer-issue-view-comments-button issue repo))
+                  (insert "\n"))
+              issues)
+        (setq buffer-read-only t)
+        (goto-char (point-min)))
+      (display-buffer buf))))
+
+(defmethod gh-viewer-issue-assignees ((issue gh-issues-issue))
+  (mapcar #'(lambda (user) (oref user login))
+          (oref issue assignees)))
+
 (defun gh-viewer-issue-assignee-equal-p (issue assignee)
-  (cl-find-if #'(lambda (user)
-                  (string= assignee (oref user login)))
-              (oref issue assignees)))
+  (cl-find-if #'(lambda (login) (string= assignee login))
+              (gh-viewer-issue-assignees issue)))
 
 (defun gh-viewer-issue-user-equal-p (issue user)
   (string= user (gh-viewer-issue-user-name issue)))
 
+(defun gh-viewer-select-query ()
+  (cdr (assoc
+        (completing-read "Select Query: " gh-viewer-issue-queries)
+        gh-viewer-issue-queries)))
+
 ;;;###autoload
-(defun gh-viewer-issue-filtered ()
+(defun gh-viewer-issue-filtered (&optional query)
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
-         (query (cdr (assoc query-name gh-viewer-issue-queries))))
+         (query (or query (gh-viewer-select-query))))
     (cl-labels
-        ((display (issues)
-                  (gh-viewer-issue-render
-                   (gh-viewer-issue--create-buffer repo)
-                   (cl-remove-if-not query issues))))
-      (gh-viewer-repo-issues repo #'display))))
-
-(defmethod gh-viewer-issue-notify-new-issue-p ((issue gh-issues-issue) repo)
-  (if (gh-viewer-pull-request-p issue)
-      (gh-viewer-repo-notify-new-pull-request-p repo)
-    (gh-viewer-repo-notify-new-issue-p repo)))
+        ((open (issue repository)
+               (gh-viewer-buffer-display issue repository)
+               (gh-viewer-remove-unread issue)
+               (gh-viewer-remove-unread (oref issue comments)))
+         (display (repository)
+                  (if (< (length (oref (oref repository issues) nodes)) 1)
+                      (message "No Issues in %s" (gh-viewer-stringify-short repository))
+                    (let ((issue (gh-viewer-select
+                                  (gh-viewer-filter-issue
+                                   (oref repository issues)
+                                   query))))
+                      (if (gh-viewer-has-more (oref issue comments) "ASC")
+                          (progn
+                            (message "Loading Comments...")
+                            (gh-viewer-fetch (oref issue comments) issue repository
+                                             #'(lambda () (open issue repository))))
+                        (open issue repository))))))
+      (if (gh-viewer-use-cache-p repo)
+          (display (oref repo repository))
+        (gh-viewer-fetch repo #'display)))))
 
 (defmethod gh-viewer-issue-notification-message ((issue gh-issues-issue))
   (with-slots (number title) issue
     (format "#%s %s by %s"
             number title (gh-viewer-issue-user-name issue))))
 
-(defmethod gh-viewer-issue-notify-new-issue ((issue gh-issues-issue) repo)
-  (and (gh-viewer-issue-notify-new-issue-p issue repo)
-       (let* ((repo-name (gh-viewer-repo-to-string repo))
-              (title (if (gh-viewer-pull-request-p issue)
-                         (format "New Pull Request in %s" repo-name)
-                       (format "New Issue in %s" repo-name))))
-         (alert (gh-viewer-issue-notification-message issue)
-                :title title))))
-
 (defmethod gh-viewer-issue-equal-p ((issue gh-issues-issue) other)
   (equal (gh-issues--issue-id issue)
          (gh-issues--issue-id other)))
 
-(defmethod gh-viewer-issue-notify-updated-issue-p ((issue gh-issues-issue) repo)
-  (if (gh-viewer-pull-request-p issue)
-      (gh-viewer-repo-notify-updated-pull-request-p repo)
-    (gh-viewer-repo-notify-updated-issue-p repo)))
+(defmethod gh-viewer-issue-labels ((issue gh-issues-issue))
+  (mapcar #'(lambda (label) (oref label name))
+          (oref issue labels)))
 
-(defmethod gh-viewer-issue-notify-updated-issue ((issue gh-issues-issue) repo)
-  (and (gh-viewer-issue-notify-updated-issue-p issue repo)
-       (let* ((repo-name (gh-viewer-repo-to-string repo))
-              (title (if (gh-viewer-pull-request-p issue)
-                         (format "Pull Request Updated in %s" repo-name)
-                       (format "Issue Updated in %s" repo-name))))
-         (alert (gh-viewer-issue-notification-message issue)
-                :title title))))
+(defmethod gh-viewer-issue-changes ((issue gh-issues-issue) old)
+  (cl-labels
+      ((build-props
+        (issue)
+        (with-slots
+            (state title body user milestone comments updated-at) issue
+          (list (cons "state" state)
+                (cons "title" title)
+                (cons "body" body)
+                (cons "user" user)
+                (cons "labels" (gh-viewer-issue-labels issue))
+                (cons "assignees" (gh-viewer-issue-assignees issue))
+                (cons "milestone" (oref milestone title))
+                (cons "comments" comments)))))
+    (let ((props (build-props issue))
+          (old-props (build-props old)))
+      (cl-remove-if #'null
+                    (mapcar #'(lambda (prop)
+                                (let ((new-value (cdr prop))
+                                      (old-value (cdr (cl-assoc (car prop) old-props
+                                                                :test #'string=))))
+                                  (unless (equal new-value old-value)
+                                    (cons (car prop) (cons old-value new-value)))))
+                            props)))))
 
 (provide 'gh-viewer-issue)
 ;;; gh-viewer-issue.el ends here
