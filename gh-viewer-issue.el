@@ -71,13 +71,7 @@
 ;;;###autoload
 (defun gh-viewer-issue (&optional invalidate-cache)
   (interactive)
-  (let* ((repo (gh-viewer-repo-select)))
-    (cl-labels
-        ((display (issues)
-                  (gh-viewer-issue-render
-                   repo
-                   (cl-remove-if #'gh-viewer-pull-request-p issues))))
-      (gh-viewer-repo-issues repo #'display invalidate-cache))))
+  (gh-viewer-issue-filtered #'identity))
 
 (defun gh-viewer-issue-propertize-issue-property (prop-name)
   (propertize prop-name 'face 'gh-viewer-issue-property-name-face))
@@ -115,7 +109,7 @@
 
 (defmethod gh-viewer-issue-comment-buffer-name ((issue gh-issues-issue) repo)
   (format "*Gh-Viewer: %s Issue: %s - Comments*"
-          (gh-viewer-repo-to-string repo)
+          (gh-viewer-stringify repo)
           (oref issue title)))
 
 (defmethod gh-viewer-issue-comment-to-string ((comment gh-comment))
@@ -186,20 +180,37 @@
 (defun gh-viewer-issue-user-equal-p (issue user)
   (string= user (gh-viewer-issue-user-name issue)))
 
+(defun gh-viewer-select-query ()
+  (cdr (assoc
+        (completing-read "Select Query: " gh-viewer-issue-queries)
+        gh-viewer-issue-queries)))
+
 ;;;###autoload
-(defun gh-viewer-issue-filtered ()
+(defun gh-viewer-issue-filtered (&optional query)
   (interactive)
   (let* ((repo (gh-viewer-repo-select))
-         (query-name (completing-read "Select Filter: " gh-viewer-issue-queries))
-         (query (cdr (assoc query-name gh-viewer-issue-queries))))
+         (query (or query (gh-viewer-select-query))))
     (cl-labels
-        ((display (issues)
-                  (gh-viewer-issue-render
-                   repo
-                   (cl-remove-if-not #'(lambda (issue) (and (not (gh-viewer-pull-request-p issue))
-                                                            (funcall query issue)))
-                                     issues))))
-      (gh-viewer-repo-issues repo #'display))))
+        ((open (issue repository)
+               (gh-viewer-buffer-display issue repository)
+               (gh-viewer-remove-unread issue)
+               (gh-viewer-remove-unread (oref issue comments)))
+         (display (repository)
+                  (if (< (length (oref (oref repository issues) nodes)) 1)
+                      (message "No Issues in %s" (gh-viewer-stringify-short repository))
+                    (let ((issue (gh-viewer-select
+                                  (gh-viewer-filter-issue
+                                   (oref repository issues)
+                                   query))))
+                      (if (gh-viewer-has-more (oref issue comments) "ASC")
+                          (progn
+                            (message "Loading Comments...")
+                            (gh-viewer-fetch (oref issue comments) issue repository
+                                             #'(lambda () (open issue repository))))
+                        (open issue repository))))))
+      (if (gh-viewer-use-cache-p repo)
+          (display (oref repo repository))
+        (gh-viewer-fetch repo #'display)))))
 
 (defmethod gh-viewer-issue-notification-message ((issue gh-issues-issue))
   (with-slots (number title) issue
