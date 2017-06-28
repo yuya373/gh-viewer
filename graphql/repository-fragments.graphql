@@ -1,0 +1,39 @@
+fragment pullRequestReviewComment on PullRequestReviewComment {
+  id
+  ...comment
+  bodyText
+}
+
+fragment userConnection on UserConnection {
+  nodes {
+    ...actor
+  }
+  pageInfo {
+    ...pageInfo
+  }
+}
+
+fragment reactionConnection on ReactionConnection {
+  nodes {
+    id
+    content
+    user {
+      ...actor
+    }
+  }
+  pageInfo {
+    ...pageInfo
+  }
+  totalCount
+}
+
+fragment labelConnection on LabelConnection {
+  nodes {
+    color
+    name
+  }
+  pageInfo {
+    ...pageInfo
+  }
+  totalCount
+}
